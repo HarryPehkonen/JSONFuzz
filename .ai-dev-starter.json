@@ -1,0 +1,102 @@
+{
+  "kit": "AI-DEV-STARTER",
+  "url": "https://github.com/HarryPehkonen/AI-DEV-STARTER",
+  "revision": "9f3ff726ae5bcf0b45ccde51d2582a6dd0b0edab",
+  "recorded_at": "2026-09-20",
+  "record_kind": "at-copy",
+  "record_note": "Wired from the kit at the published revision 9f3ff726. The four kit fixes (tidy-baseline, gate-stage-guards, optimized-stage, git-index-file) are carried verbatim as probes in tools/kit-probes/ and their fixes are present in tools/ci.sh. adopted_fixes is intentionally EMPTY: adopted_in must name a commit in THIS repo, and nothing is committed yet (the orchestrator commits; the two-commit shape lands then).",
+  "adopted_fixes": [],
+  "declined_fixes": [],
+  "files": [
+    {
+      "repo_path": "tools/ci.sh",
+      "kit_path": "templates/cpp/ci.sh",
+      "repo_sha256": "20ff3a112640bf75c163f12c8a5fa97db74e5fd38f180929ac2f2205ec2117e3",
+      "kit_sha256": "166e0042aa81ce24874c994a756e0c62d435da31398cd8d79d81d7600e554191",
+      "adapted": true,
+      "adapted_why": "JSONFUZZ ADAPTATIONS block: adds docs/cli/fuzz stages, hooks pass no stage list, version header/binaries paths, source globs, fuzz build dir and seconds."
+    },
+    {
+      "repo_path": ".ci.env.example",
+      "kit_path": "templates/cpp/.ci.env.example",
+      "repo_sha256": "e2d00eb22f637e413cebb39def459013d7184751fe2fc97930da1b4b53686529",
+      "kit_sha256": "eee5264aaa1b120fcd76685879559aae15bbf0fe39c45cfb0c4726d026709556",
+      "adapted": true,
+      "adapted_why": "Adds the JSONFuzz fuzz/version knobs (CI_FUZZ_SECONDS, CI_FUZZ_BUILD_DIR, CI_VERSION_HEADER, CI_VERSION_BINARIES)."
+    },
+    {
+      "repo_path": ".githooks/pre-commit",
+      "kit_path": "templates/hooks/pre-commit",
+      "repo_sha256": "d3c67d2cd7535d0b12b09ecbc8730ff459feb417b4af178971527d0928f12e52",
+      "kit_sha256": "e304ddcb48e216029c8e77402d927695dae4895532f6bf12d1ecb54604b652d8",
+      "adapted": true,
+      "adapted_why": "Passes no stage list (--fast): CI_FAST_STAGES in tools/ci.sh is the one definition of the fast tier."
+    },
+    {
+      "repo_path": ".githooks/pre-push",
+      "kit_path": "templates/hooks/pre-push",
+      "repo_sha256": "08477413e878d62a6cffe34b57baa4b7e868b01e7183b3081e2d37cde14b4b49",
+      "kit_sha256": "f3ee3909b042ba74728f09b8c68aa2a82f23fe212ebea1f79aae89f5cef9ca07",
+      "adapted": true,
+      "adapted_why": "Passes no stage list (--require-clean --full): CI_DEFAULT_STAGES in tools/ci.sh is the one definition of the full tier."
+    },
+    {
+      "repo_path": "INCIDENTS.md",
+      "kit_path": "INCIDENTS.md",
+      "repo_sha256": "e6e636dbdd3e26c727aff5045c8d50427d79c41011b0c6ace1172e76ca099e0f",
+      "kit_sha256": "e6e636dbdd3e26c727aff5045c8d50427d79c41011b0c6ace1172e76ca099e0f",
+      "adapted": false
+    },
+    {
+      "repo_path": "CLAUDE.md",
+      "kit_path": "templates/CLAUDE.md.template",
+      "repo_sha256": "78a959a6e3eff7dc8e2eafce5758d4b69e1a5d56be4ec252f2cbce7fb41e9976",
+      "kit_sha256": "615ad65a51eb5b70a59882d261eeacc1510cbd7c8cd59d730bba945ad19fa3da",
+      "adapted": true,
+      "adapted_why": "Every template placeholder filled for JSONFuzz (commands, architecture, invariants, gotchas)."
+    },
+    {
+      "repo_path": ".gitignore",
+      "kit_path": ".gitignore",
+      "repo_sha256": "18eb8f5bc7154f2c8864070f4d35f9380263c36303cd59e8319c7e7b22c8ec72",
+      "kit_sha256": "c597d47ba50ca7a4d0527e816bc893f0564aa9fe08796a36e2342a23bdf8b543",
+      "adapted": true,
+      "adapted_why": "Adds JSONFuzz-specific rules: fuzz/corpus/ and *.intent.json ignored; fuzz/seeds/ and fuzz/regressions/ tracked."
+    },
+    {
+      "repo_path": "LICENSE",
+      "kit_path": "LICENSE",
+      "repo_sha256": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e",
+      "kit_sha256": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e",
+      "adapted": false
+    },
+    {
+      "repo_path": "tools/kit-probes/tidy-baseline.sh",
+      "kit_path": "probes/tidy-baseline.sh",
+      "repo_sha256": "efd9bbca108bb7bd1e527d95d09546c1b3bceca451054367b2fed6f92bfc6379",
+      "kit_sha256": "efd9bbca108bb7bd1e527d95d09546c1b3bceca451054367b2fed6f92bfc6379",
+      "adapted": false
+    },
+    {
+      "repo_path": "tools/kit-probes/gate-stage-guards.sh",
+      "kit_path": "probes/gate-stage-guards.sh",
+      "repo_sha256": "0a9f752c5081d6cc61b0f478ebee356d1358c7aca9562643411249901178be86",
+      "kit_sha256": "0a9f752c5081d6cc61b0f478ebee356d1358c7aca9562643411249901178be86",
+      "adapted": false
+    },
+    {
+      "repo_path": "tools/kit-probes/optimized-stage.sh",
+      "kit_path": "probes/optimized-stage.sh",
+      "repo_sha256": "d0d7a184ebbe7847c1366983b0b6ff72c86eb2ea2eaba130aa46b132b0a29c25",
+      "kit_sha256": "d0d7a184ebbe7847c1366983b0b6ff72c86eb2ea2eaba130aa46b132b0a29c25",
+      "adapted": false
+    },
+    {
+      "repo_path": "tools/kit-probes/git-index-file.sh",
+      "kit_path": "probes/git-index-file.sh",
+      "repo_sha256": "6818e5d5b049edc250dc5b7cd1e620917cf80afef0bbade83b8cbb690ddc27e6",
+      "kit_sha256": "6818e5d5b049edc250dc5b7cd1e620917cf80afef0bbade83b8cbb690ddc27e6",
+      "adapted": false
+    }
+  ]
+}

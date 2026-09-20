@@ -1,0 +1,14 @@
+# Repo-scoped clang-tidy. The HeaderFilterRegex is POSITIVE and matches only this repo's
+# own files: an unfiltered run lints the dependency's headers (googletest, nlohmann) and
+# can never be green. The .cpp alternative carries the repo name so an absolute path
+# (which the compile database reports) still matches; the .hpp alternative matches the
+# public headers under include/jsonfuzz/.
+HeaderFilterRegex: 'include/jsonfuzz/.*\.hpp$|JSONFuzz/(src|tests|fuzz)/.*\.cpp$'
+# Value-only set: real bug patterns + performance. Style lives in clang-format.
+Checks: '-*,bugprone-*,performance-*'
+
+CheckOptions:
+  - key: readability-function-cognitive-complexity.IgnoreMacros
+    value: true
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 30

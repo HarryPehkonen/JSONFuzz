@@ -1,0 +1,37 @@
+# The gate's own footprint. This is the recipe in PLUNK-IN.md step 3, plus the
+# JSONFuzz-specific rules. The C++ gate's `tree` stage fails when the gate's own
+# output shows up as an untracked file, so these are ignored BEFORE the first run.
+
+# the gate's own footprint
+.ci-logs/
+build/
+build-*/
+.ci.env
+
+# python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# deno
+# (nothing: deno.lock belongs in git)
+
+# defensive, beyond the shipped recipe
+_deps/
+*.log
+
+# JSONFuzz-specific
+# fuzz/corpus/ is scratch (libFuzzer grows it); fuzz/seeds/ and fuzz/regressions/
+# are TRACKED (the seeds are the documentation examples, a defect found becomes a
+# tracked reproducer).
+fuzz/corpus/
+# the CLI `gen --intent <file>` sidecar
+*.intent.json
+
+# NOT ignored, deliberately: .ci/ holds the clang-tidy baseline
+# (.ci/tidy-baseline.txt), which is tracked — it is this repo's accepted-findings list
+# and the tidy stage compares against it. Ignoring the directory would silently exempt
+# that file from the tree stage, which is the failure the stage exists to catch.
