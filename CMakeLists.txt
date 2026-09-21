@@ -71,7 +71,11 @@ target_include_directories(jsonfuzz_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${JSONFUZZ_GENERATED_INCLUDE_DIR}>
 )
-target_link_libraries(jsonfuzz_core PUBLIC nlohmann_json::nlohmann_json)
+# PRIVATE, deliberately: nlohmann is the implementation's own model. No public header
+# includes it (the SUT interface is strings only), so a consumer of jsonfuzz_core must not
+# inherit the dependency or its include paths — e.g. the JSOM adapter links jsonfuzz_core
+# without gaining a nlohmann dependency, which is the whole point of the string boundary.
+target_link_libraries(jsonfuzz_core PRIVATE nlohmann_json::nlohmann_json)
 target_compile_features(jsonfuzz_core PRIVATE cxx_std_17)
 
 add_library(JSONFuzz::core ALIAS jsonfuzz_core)
