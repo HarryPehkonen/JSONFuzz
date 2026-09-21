@@ -191,3 +191,56 @@ if(CLANG_FORMAT)
 endif()
 
 message(STATUS "JSONFuzz ${PROJECT_VERSION} — tests=${JSONFUZZ_BUILD_TESTS} fuzzing=${JSONFUZZ_BUILD_FUZZING}")
+
+# ================================
+# Configure-time target listing
+# ================================
+# Print what can be built, right where `cmake -B build` is typed. Two properties make this
+# worth having rather than noise:
+#   * the SET is derived from the build system (BUILDSYSTEM_TARGETS), so a target added later
+#     shows up by itself — the curated lines only add what the build system cannot know,
+#     namely what each target is FOR. (A hand-written list would drift, which is the thing
+#     the `docs` gate exists to prevent.)
+#   * it re-prints on every reconfigure, which is exactly when it is needed: after a
+#     CMakeLists.txt change, `cmake --build build --target NEW` fails with "No rule to make
+#     target 'NEW'" until CMake has been re-run once.
+# Deliberately NOT a target called `help`: the GNU Make generator already provides one
+# listing targets, and Ninja has `ninja -t targets`. Deliberately at the end of the
+# top-level file rather than cmake_language(DEFER CALL ...), which would raise the minimum
+# CMake from 3.16 to 3.19 for a courtesy. Guarded to the top-level project so a consumer
+# taking JSONFuzz in as a subdirectory (the pattern jsonTools uses for JSOM) does not get
+# this block in its own configure output.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(_jsonfuzz_purpose_jsonfuzz_core "the library (include/jsonfuzz + src)")
+    set(_jsonfuzz_purpose_jsonfuzz "the CLI")
+    set(_jsonfuzz_purpose_jsonfuzz_tests "the GoogleTest suite")
+    set(_jsonfuzz_purpose_fuzz_jsonfuzz "the libFuzzer target (clang only; -DJSONFUZZ_BUILD_FUZZING=ON)")
+    set(_jsonfuzz_purpose_format "reformat the sources in place with clang-format")
+
+    set(_jsonfuzz_named "")
+    foreach(_name IN ITEMS jsonfuzz_core jsonfuzz jsonfuzz_tests fuzz_jsonfuzz format)
+        if(TARGET ${_name})
+            list(APPEND _jsonfuzz_named ${_name})
+        endif()
+    endforeach()
+
+    get_property(_jsonfuzz_built DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    set(_jsonfuzz_other "")
+    foreach(_t IN LISTS _jsonfuzz_built)
+        get_target_property(_jsonfuzz_alias_of ${_t} ALIASED_TARGET)
+        if(_jsonfuzz_alias_of OR _t IN_LIST _jsonfuzz_named)
+            continue()
+        endif()
+        list(APPEND _jsonfuzz_other ${_t})
+    endforeach()
+
+    message(STATUS "")
+    message(STATUS "Build targets — cmake --build ${CMAKE_BINARY_DIR} --target <name>")
+    foreach(_name IN LISTS _jsonfuzz_named)
+        message(STATUS "  ${_name} — ${_jsonfuzz_purpose_${_name}}")
+    endforeach()
+    if(_jsonfuzz_other)
+        message(STATUS "  (also present, not usually built by hand: ${_jsonfuzz_other})")
+    endif()
+    message(STATUS "")
+endif()
