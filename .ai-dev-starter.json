@@ -4,7 +4,7 @@
   "revision": "9f3ff726ae5bcf0b45ccde51d2582a6dd0b0edab",
   "recorded_at": "2026-09-20",
   "record_kind": "at-copy",
-  "record_note": "Wired from the kit at the published revision 9f3ff726. The four kit fixes (tidy-baseline, gate-stage-guards, optimized-stage, git-index-file) are carried verbatim as probes in tools/kit-probes/ and their fixes are present in tools/ci.sh. adopted_fixes is intentionally EMPTY: adopted_in must name a commit in THIS repo, and nothing is committed yet (the orchestrator commits; the two-commit shape lands then).",
+  "record_note": "Wired from the kit at the published revision 9f3ff726. The four kit fixes (tidy-baseline, gate-stage-guards, optimized-stage, git-index-file) are carried verbatim as probes in tools/kit-probes/ and their fixes are present in tools/ci.sh. adopted_fixes is intentionally EMPTY: adopted_in must name a commit in THIS repo, and nothing is committed yet (the orchestrator commits; the two-commit shape lands then). tools/kit-probes/consumer-subdirectory.sh is deliberately NOT listed here: it is a repo-local probe holding our own rule (a consumer gets JSONFuzz::core and nothing else), not a kit fix, and files[]/adopted_fixes are for artifacts that came FROM the kit. See the JSONFUZZ ADAPTATIONS item 6 in tools/ci.sh.",
   "adopted_fixes": [],
   "declined_fixes": [],
   "files": [

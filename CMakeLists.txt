@@ -20,6 +20,13 @@ if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
 else()
     set(JSONFUZZ_IS_TOP_LEVEL OFF)
 endif()
+# THE RULE: a consumer gets `JSONFuzz::core` and NOTHING ELSE. Every other artifact here — the
+# CLI, the tests, the fuzz target, the compile-only fuzz object library, the `format` target and
+# the configure-time target listing — is top-level only, because each one is either useless to a
+# consumer or actively harmful: `format` COLLIDED with a consumer's own target of the same name
+# and made JSONFuzz impossible to take in via add_subdirectory at all (measured from JSOM,
+# 2026-09-20: `add_custom_target cannot create target "format" because another target with the
+# same name already exists`). tools/kit-probes/consumer-subdirectory.sh holds this rule.
 
 # Compiler configuration
 set(CMAKE_CXX_STANDARD 17)
@@ -49,12 +56,31 @@ include(FetchContent)
 # ================================
 # nlohmann/json is the mutation toolkit's own model (brief §3): the operators parse and
 # restructure through it. It is NOT a SUT — the SUT interface stays parser-agnostic.
-FetchContent_Declare(
-    nlohmann_json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG        v3.11.3
-)
-FetchContent_MakeAvailable(nlohmann_json)
+#
+# Resolution order, cheapest first. Measured 2026-09-20: an unconditional FetchContent clone
+# cost 1452 s of configure — 24 minutes — for headers already sitting in /usr/include, and in a
+# subdirectory consumer it clones a second copy of something the consumer may already have.
+#   1. JSONFUZZ_NLOHMANN_DIR — an include directory holding nlohmann/json.hpp. Offline, needs no
+#      CMake package; this is what the consumer-subdirectory probe uses to stay network-free.
+#   2. find_package — a distro package, or the target a consumer already created.
+#   3. FetchContent, pinned — the fallback for a bare machine.
+if(NOT TARGET nlohmann_json::nlohmann_json)
+    if(DEFINED JSONFUZZ_NLOHMANN_DIR AND EXISTS "${JSONFUZZ_NLOHMANN_DIR}/nlohmann/json.hpp")
+        add_library(jsonfuzz_nlohmann INTERFACE)
+        target_include_directories(jsonfuzz_nlohmann INTERFACE "${JSONFUZZ_NLOHMANN_DIR}")
+        add_library(nlohmann_json::nlohmann_json ALIAS jsonfuzz_nlohmann)
+    else()
+        find_package(nlohmann_json 3.2.0 QUIET)
+        if(NOT TARGET nlohmann_json::nlohmann_json)
+            FetchContent_Declare(
+                nlohmann_json
+                GIT_REPOSITORY https://github.com/nlohmann/json.git
+                GIT_TAG        v3.11.3
+            )
+            FetchContent_MakeAvailable(nlohmann_json)
+        endif()
+    endif()
+endif()
 
 # ================================
 # Core library
@@ -63,8 +89,8 @@ add_library(jsonfuzz_core
     src/jsonfuzz_core.cpp
     src/jsonfuzz_sut.cpp
     src/jsonfuzz_generator.cpp
-src/jsonfuzz_mutate.cpp
-src/jsonfuzz_oracle.cpp
+    src/jsonfuzz_mutate.cpp
+    src/jsonfuzz_oracle.cpp
     src/jsonfuzz_readings.cpp
 )
 target_include_directories(jsonfuzz_core PUBLIC
@@ -83,14 +109,18 @@ add_library(JSONFuzz::core ALIAS jsonfuzz_core)
 # ================================
 # CLI
 # ================================
-add_executable(jsonfuzz
-    src/jsonfuzz_cli.cpp
-)
-target_link_libraries(jsonfuzz PRIVATE jsonfuzz_core)
-target_include_directories(jsonfuzz PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${JSONFUZZ_GENERATED_INCLUDE_DIR}
-)
+# Top-level only: an executable is not what a consumer wants, and building it by default in
+# somebody else's tree is rude at best (see THE RULE above).
+if(JSONFUZZ_IS_TOP_LEVEL)
+    add_executable(jsonfuzz
+        src/jsonfuzz_cli.cpp
+    )
+    target_link_libraries(jsonfuzz PRIVATE jsonfuzz_core)
+    target_include_directories(jsonfuzz PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${JSONFUZZ_GENERATED_INCLUDE_DIR}
+    )
+endif()
 
 # ================================
 # Testing
@@ -109,14 +139,14 @@ if(JSONFUZZ_BUILD_TESTS)
     FetchContent_MakeAvailable(googletest)
 
 add_executable(jsonfuzz_tests
-        tests/test_version.cpp
-        tests/test_cli.cpp
-        tests/test_sut.cpp
-        tests/test_generator.cpp
-tests/test_mutate.cpp
-tests/test_oracle.cpp
-        tests/test_readings.cpp
-    )
+    tests/test_version.cpp
+    tests/test_cli.cpp
+    tests/test_sut.cpp
+    tests/test_generator.cpp
+    tests/test_mutate.cpp
+    tests/test_oracle.cpp
+    tests/test_readings.cpp
+)
     target_link_libraries(jsonfuzz_tests PRIVATE jsonfuzz_core gtest gtest_main)
     target_include_directories(jsonfuzz_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     # CMake's PROJECT_VERSION as a compile definition: the test asserts the generated
@@ -138,12 +168,16 @@ endif()
 # it) gives fuzz/fuzz_jsonfuzz.cpp a translation unit in the default build so tidy can
 # analyse it. The source itself stays g++-clean: it must not include libFuzzer-only
 # headers (the same pattern JSOM uses for its fuzzer).
-add_library(jsonfuzz_fuzz_obj OBJECT fuzz/fuzz_jsonfuzz.cpp)
-target_include_directories(jsonfuzz_fuzz_obj PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${JSONFUZZ_GENERATED_INCLUDE_DIR}
-)
-target_compile_features(jsonfuzz_fuzz_obj PRIVATE cxx_std_17)
+# Top-level only: it exists for THIS repo's tidy gate, and compiling somebody else's fuzz
+# harness source in a consumer's build directory is pure waste.
+if(JSONFUZZ_IS_TOP_LEVEL)
+    add_library(jsonfuzz_fuzz_obj OBJECT fuzz/fuzz_jsonfuzz.cpp)
+    target_include_directories(jsonfuzz_fuzz_obj PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${JSONFUZZ_GENERATED_INCLUDE_DIR}
+    )
+    target_compile_features(jsonfuzz_fuzz_obj PRIVATE cxx_std_17)
+endif()
 
 # ================================
 # Fuzzing — clang only
@@ -182,7 +216,7 @@ file(GLOB JSONFUZZ_FORMAT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/fuzz/*.cpp
 )
 find_program(CLANG_FORMAT NAMES clang-format)
-if(CLANG_FORMAT)
+if(JSONFUZZ_IS_TOP_LEVEL AND CLANG_FORMAT)
     add_custom_target(format
         COMMAND ${CLANG_FORMAT} -i ${JSONFUZZ_FORMAT_SOURCES}
         COMMENT "Formatting source files with clang-format"

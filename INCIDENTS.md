@@ -14,6 +14,42 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-09-20 — JSONFuzz could not be taken in as somebody else's subdirectory, and the workaround was worse than the bug
+
+What broke:        Pulling JSONFuzz into another project with `FetchContent_MakeAvailable` /
+                   `add_subdirectory` died at configure: `add_custom_target cannot create target
+                   "format" because another target with the same name already exists`. The
+                   `format` target was guarded only by `if(CLANG_FORMAT)`, so any consumer with
+                   its own `format` target could not take this repo in at all. JSOM worked around
+                   it by fetching JSONFuzz's SOURCE and hand-listing the six `jsonfuzz_core`
+                   translation units plus replicating the generated `version.hpp` — which means a
+                   source added or renamed HERE (the next oracle, say) silently falls out of
+                   JSOM's fuzz build: the fuzzer gets weaker and both gates stay green. The
+                   workaround was worse than the bug, so the fix is the guard, not a better
+                   hand-list.
+Check added:       `tools/kit-probes/consumer-subdirectory.sh` — a throwaway consumer with its own
+                   `format` target that takes this repo in via `add_subdirectory` and must
+                   configure cleanly. It also pins THE RULE that a consumer gets `JSONFuzz::core`
+                   and NOTHING ELSE: the CLI, the tests, the libFuzzer target, the compile-only
+                   fuzz object library and the configure-time target listing are all top-level
+                   only, checked by name and by `--target` behaviour (`--target jsonfuzz` must
+                   fail, `--target format` must run the CONSUMER's target). The `kitprobes` stage
+                   runs it — 9 checks, ~2 s, offline (nlohmann is pointed at a local include dir).
+                   Teeth verified against a copy with the guard reverted: 3 checks fail, including
+                   the exact configure error above.
+                   This probe is NOT a kit fix: it is repo-local, and deliberately not listed in
+                   `.ai-dev-starter.json`'s `adopted_fixes` (whose `probe` must name a path in the
+                   kit). It lives in `tools/kit-probes/` because that directory is the mechanism
+                   the `kitprobes` stage runs.
+Why it must stay:  Without the guard the repo is unconsumable as a subdirectory, and the only
+                   workaround a consumer has is a hand-listed source set, which silently drops new
+                   sources — a coverage loss no gate reports, in a repo whose whole purpose is
+                   finding silent losses. The probe is also the net for the next artifact: any
+                   new top-level-only target that is added WITHOUT a guard trips its `--target`
+                   checks.
+
+---
+
 ## 2026-09-20 — the generator's pointer-key class was unreachable at the fuzz target's weight
 
 What broke:        A get() sabotage on '/'-keys (return the wrong member when the pointer's

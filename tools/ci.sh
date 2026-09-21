@@ -58,6 +58,15 @@
 #    The libFuzzer target itself is still clang-only and built in its own build dir.
 # 5. CI_FUZZ_SECONDS=10 (the brief's budget) and CI_FUZZ_BUILD_DIR=build-fuzz (a
 #    separate dir so the clang fuzz build never touches the default build).
+# 6. tools/kit-probes/ carries the FOUR probes this copy adopted from the kit (tidy-baseline,
+#    gate-stage-guards, optimized-stage, git-index-file) AND one REPO-LOCAL probe that is not a
+#    kit fix at all: consumer-subdirectory.sh, which holds our own architectural rule that a
+#    consumer of this repo gets `JSONFuzz::core` and nothing else (the CLI, tests, fuzz target,
+#    fuzz object library, `format` target and target listing are top-level only). It is
+#    deliberately NOT listed in .ai-dev-starter.json's adopted_fixes — that list's `probe` must
+#    name a path in the kit, and claiming a repo-local probe as a kit fix would make the record
+#    lie about provenance. The `kitprobes` stage runs every script in the directory, which is
+#    why the local one lives there; its header says all of this.
 # ============================================================================
 
 set -uo pipefail
@@ -490,7 +499,7 @@ stage_kitprobes() {
         if bash "$probe" "$self" "$REPO_ROOT"; then
             printf '    ok   %s\n' "$name"
         else
-            printf '    FAIL %s — this gate is missing that kit fix\n' "$name"
+            printf '    FAIL %s — this copy is missing what that probe holds\n' "$name"
             failed=1
         fi
     done
