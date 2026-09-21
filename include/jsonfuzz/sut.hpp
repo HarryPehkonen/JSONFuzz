@@ -114,4 +114,23 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
+/// A deliberately-broken SUT, registered as "broken-comma": it parses strictly (via the
+/// toy) but serializes the last accepted parse with a trailing comma before a closer, so
+/// its serializer output does not reparse. NOT used by the fuzz target (which needs a
+/// correct reference); it exists so the CLI `check` verb and the oracle's teeth can be
+/// exercised end-to-end against a known-bad adapter.
+class BrokenCommaSut : public SystemUnderTest {
+public:
+    BrokenCommaSut();
+    ~BrokenCommaSut() override;
+    ParseResult parse(std::string_view text, const ParseConfig& config) override;
+    std::string serialize() const override;
+    std::vector<std::string> pointers(int max_depth) const override;
+    std::optional<std::string> get(std::string_view pointer) const override;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
 } // namespace jsonfuzz

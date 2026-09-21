@@ -63,7 +63,9 @@ add_library(jsonfuzz_core
     src/jsonfuzz_core.cpp
     src/jsonfuzz_sut.cpp
     src/jsonfuzz_generator.cpp
-    src/jsonfuzz_mutate.cpp
+src/jsonfuzz_mutate.cpp
+src/jsonfuzz_oracle.cpp
+    src/jsonfuzz_readings.cpp
 )
 target_include_directories(jsonfuzz_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -107,7 +109,9 @@ add_executable(jsonfuzz_tests
         tests/test_cli.cpp
         tests/test_sut.cpp
         tests/test_generator.cpp
-        tests/test_mutate.cpp
+tests/test_mutate.cpp
+tests/test_oracle.cpp
+        tests/test_readings.cpp
     )
     target_link_libraries(jsonfuzz_tests PRIVATE jsonfuzz_core gtest gtest_main)
     target_include_directories(jsonfuzz_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

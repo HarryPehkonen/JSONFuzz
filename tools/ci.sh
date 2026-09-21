@@ -444,9 +444,12 @@ stage_fuzz() {
         || ci_fail fuzz "fuzz target build failed" "$CI_LOG_DIR/fuzz-build.log"
     mkdir -p fuzz/corpus
     # Seed smoke: -runs=0 plays every seed through the target once and reports the count.
-    if ! "$CI_FUZZ_BUILD_DIR/fuzz_jsonfuzz" fuzz/seeds fuzz/corpus -runs=0 \
-        -artifact_prefix=fuzz/corpus/ > "$CI_LOG_DIR/fuzz-smoke.log" 2>&1; then
-        ci_fail fuzz "the -runs=0 seed smoke failed" "$CI_LOG_DIR/fuzz-smoke.log"
+    # JSONFUZZ_REQUIRE_REACH=1 makes the target exit non-zero unless EVERY reading reached
+    # its assertion (brief §5: "at least one input got there" is the guard that hid a
+    # blind spot in a sibling repo).
+    if ! JSONFUZZ_REQUIRE_REACH=1 "$CI_FUZZ_BUILD_DIR/fuzz_jsonfuzz" fuzz/seeds fuzz/corpus \
+        -runs=0 -artifact_prefix=fuzz/corpus/ > "$CI_LOG_DIR/fuzz-smoke.log" 2>&1; then
+        ci_fail fuzz "the -runs=0 seed smoke failed (a reading starved, or a finding)" "$CI_LOG_DIR/fuzz-smoke.log"
     fi
     grep -E "Done|running [0-9]+ inputs|INFO:.*files found" "$CI_LOG_DIR/fuzz-smoke.log" | tail -2 | sed 's/^/      /'
     # The short real campaign.

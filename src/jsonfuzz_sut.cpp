@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <cstdint>
+#include <set>
 #include <utility>
 
 namespace jsonfuzz {
@@ -392,7 +393,16 @@ void collect_pointers(const JsonValue& v, const std::string& ptr, int depth, int
             collect_pointers(v.array[i], ptr + "/" + std::to_string(i), depth + 1, max_depth, out);
         }
     } else if (v.kind == JsonValue::Kind::Object) {
+        // get() resolves a duplicate key to its FIRST occurrence, so pointers() must
+        // enumerate each key once or it emits pointers get() cannot resolve (measured:
+        // the fuzzer found "//" — a nested empty-key member — unresolvable because the
+        // first "" member was a scalar, not the object). First occurrence wins, matching
+        // get().
+        std::set<std::string> seen;
         for (const auto& kv : v.object) {
+            if (!seen.insert(kv.first).second) {
+                continue;
+            }
             collect_pointers(kv.second, ptr + "/" + escape_pointer_token(kv.first), depth + 1,
                              max_depth, out);
         }
@@ -512,6 +522,34 @@ std::optional<std::string> ToySut::get(std::string_view pointer) const {
     return get_value(impl_->root, pointer);
 }
 
+struct BrokenCommaSut::Impl {
+    ToySut toy;
+};
+
+BrokenCommaSut::BrokenCommaSut() : impl_(std::make_unique<Impl>()) {}
+
+BrokenCommaSut::~BrokenCommaSut() = default;
+
+ParseResult BrokenCommaSut::parse(std::string_view text, const ParseConfig& config) {
+    return impl_->toy.parse(text, config);
+}
+
+std::string BrokenCommaSut::serialize() const {
+    std::string s = impl_->toy.serialize();
+    if (!s.empty() && (s.back() == '}' || s.back() == ']')) {
+        s.insert(s.size() - 1, ","); // "{...}" -> "{...,}"
+    }
+    return s;
+}
+
+std::vector<std::string> BrokenCommaSut::pointers(int max_depth) const {
+    return impl_->toy.pointers(max_depth);
+}
+
+std::optional<std::string> BrokenCommaSut::get(std::string_view pointer) const {
+    return impl_->toy.get(pointer);
+}
+
 SutRegistry& default_registry() {
     static SutRegistry registry;
     return registry;
@@ -524,6 +562,8 @@ namespace {
 struct ToyRegistrar {
     ToyRegistrar() {
         default_registry().register_sut("toy", [] { return std::make_unique<ToySut>(); });
+        default_registry().register_sut("broken-comma",
+                                        [] { return std::make_unique<BrokenCommaSut>(); });
     }
 };
 ToyRegistrar toy_registrar;

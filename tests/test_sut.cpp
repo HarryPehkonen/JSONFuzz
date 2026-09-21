@@ -90,6 +90,21 @@ TEST(ToySutTest, PointerEscaping) {
     EXPECT_EQ(sut.get("/~0"), std::optional<std::string>("2"));
 }
 
+TEST(ToySutTest, DuplicateKeysPointersAndGetAgree) {
+    // Found by the fuzzer (fuzz/regressions/duplicate-empty-keys.json): with duplicate
+    // keys, pointers() enumerated EVERY occurrence while get() resolved only the FIRST,
+    // so a pointer into a later duplicate (here "//", a nested empty-key member) did not
+    // resolve. Every pointer the SUT enumerates must resolve back to a value.
+    ToySut sut;
+    const ParseConfig cfg;
+    ASSERT_TRUE(sut.parse(R"({"":null,"":{"":null}})", cfg).accepted);
+    const auto ptrs = sut.pointers(8);
+    ASSERT_FALSE(ptrs.empty());
+    for (const auto& p : ptrs) {
+        EXPECT_TRUE(sut.get(p).has_value()) << "pointer " << p << " did not resolve";
+    }
+}
+
 TEST(ToySutTest, PointerEnumerationEscapesKeysSoThePointerRoundTrips) {
     ToySut sut;
     const ParseConfig cfg;

@@ -1,29 +1,79 @@
-// JSONFuzz libFuzzer target — day-one (Phase A) placeholder.
+// JSONFuzz libFuzzer target (brief §5) — the same byte input, three readings, counted
+// separately:
 //
-// Phase A drives a single trivial property so the target exists and builds from the
-// first commit: the artifact-identity string round-trips (version() is never empty and
-// equals the CMake-generated header). The real generator/mutator/oracle readings arrive
-// in Phase B; this placeholder keeps the target buildable and the seed smoke meaningful
-// (every seed is executed, so libFuzzer reports "Done N runs").
+//   1. generate -> mutate -> run both oracles against the toy SUT;
+//   2. mutate the input directly -> oracles;
+//   3. generate -> the intent record must agree with the text.
+//
+// The toy SUT is the deliberately-correct reference, so a finding here is a bug in the
+// generator, the mutators, the oracles, or the toy itself — never "the parser disagreed".
+//
+// REACH GUARD: with JSONFUZZ_REQUIRE_REACH=1 and -runs=0 over fuzz/seeds, the process
+// exits non-zero unless EVERY reading reached its assertion, and the message names which
+// one starved. "At least one input got there" is the guard that hid a blind spot in a
+// sibling repo (117 of 9,952 corpus inputs reached the assertion there and a class-shaped
+// sabotage still survived 4.2 M executions), so each reading is counted on its own.
 //
 // clang only: built by CMake with -DPROJECT_BUILD_FUZZING=ON.
 
-#include <jsonfuzz/core.hpp>
+#include <jsonfuzz/readings.hpp>
 #include <jsonfuzz/version.hpp>
 
 #include <cstddef>
 #include <cstdint>
-#include <string>
+#include <cstdio>
+#include <cstdlib>
+
+namespace {
+
+// The reach guard. A static destructor runs at process exit, after libFuzzer has played
+// every seed, so it can fail the whole run when a reading never reached.
+struct ReachGuard {
+    bool reading1 = false;
+    bool reading2 = false;
+    bool reading3 = false;
+
+    ~ReachGuard() {
+        if (std::getenv("JSONFUZZ_REQUIRE_REACH") == nullptr) {
+            return;
+        }
+        bool starved = false;
+        if (!reading1) {
+            std::fprintf(stderr, "REACH STARVED: reading 1 (generate -> mutate -> oracles)\n");
+            starved = true;
+        }
+        if (!reading2) {
+            std::fprintf(stderr, "REACH STARVED: reading 2 (mutate input -> oracles)\n");
+            starved = true;
+        }
+        if (!reading3) {
+            std::fprintf(stderr, "REACH STARVED: reading 3 (intent vs text)\n");
+            starved = true;
+        }
+        if (starved) {
+            __builtin_trap();
+        }
+    }
+};
+
+ReachGuard g_reach;
+
+} // namespace
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
-    (void)data;
-    (void)size;
+    const jsonfuzz::ReadingsResult res = jsonfuzz::run_readings(data, size);
 
-    // The placeholder property: the version string is non-empty and matches the header.
-    // A future reading replaces this with generate -> mutate -> oracle.
-    const std::string v = jsonfuzz::version();
-    if (v.empty() || v != std::string(JSONFUZZ_VERSION)) {
-        __builtin_trap();
+    g_reach.reading1 = g_reach.reading1 || res.reach.reading1;
+    g_reach.reading2 = g_reach.reading2 || res.reach.reading2;
+    g_reach.reading3 = g_reach.reading3 || res.reach.reading3;
+
+    // The counters, in the stats line, so a run shows which reading reached.
+    std::fprintf(stderr, "readings r1=%d r2=%d r3=%d violations=%zu intent_mismatch=%d\n",
+                 res.reach.reading1 ? 1 : 0, res.reach.reading2 ? 1 : 0, res.reach.reading3 ? 1 : 0,
+                 res.violations.size(), res.intent_mismatch ? 1 : 0);
+
+    if (!res.violations.empty() || res.intent_mismatch) {
+        __builtin_trap(); // a finding: libFuzzer reports it and writes an artifact
     }
     return 0;
 }
