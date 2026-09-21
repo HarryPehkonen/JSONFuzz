@@ -30,9 +30,22 @@ struct ReadingReach {
     bool reading3 = false; // generate -> intent record agrees with the text
 };
 
+/// Whether each reading's primary text was ACCEPTED (so the oracle laws actually ran)
+/// versus rejected (a trivial early exit). The toy SUT never throws, so for readings 1
+/// & 2 an accepted parse means both O1 and O2 were evaluated to completion; for reading
+/// 3, "parsed" means the intent record was compared against a real parse of the text.
+/// This is the reach measurement: a reading whose texts are mostly rejected sees the
+/// oracle laws only rarely.
+struct ReadingAccept {
+    bool reading1 = false; // reading 1's generated text was accepted
+    bool reading2 = false; // reading 2's raw input was accepted
+    bool reading3 = false; // reading 3's generated text parsed
+};
+
 /// The result of running the three readings on one byte input.
 struct ReadingsResult {
     ReadingReach reach;
+    ReadingAccept accept;
     std::vector<OracleViolation> violations; // from readings 1 & 2 (the toy SUT)
     bool intent_mismatch = false;            // reading 3: the intent disagreed with the text
 };

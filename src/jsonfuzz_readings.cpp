@@ -127,6 +127,26 @@ void check_text(const std::string& text, std::vector<OracleViolation>& out) {
     out.insert(out.end(), v.begin(), v.end());
 }
 
+// Does the toy SUT accept `text`? The toy never throws, so acceptance means the oracle
+// laws (O1 and O2) were evaluated to completion rather than hitting a trivial early exit.
+bool toy_accepts(const std::string& text) {
+    ToySut sut;
+    const ParseConfig cfg;
+    return sut.parse(text, cfg).accepted;
+}
+
+// Does nlohmann parse `text`? Used for reading 3's reach: the intent record is only
+// compared against a real parse when the text is parseable.
+bool text_parses(const std::string& text) {
+    try {
+        const nlohmann::json j = nlohmann::json::parse(text);
+        (void)j;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 } // namespace
 
 bool intent_matches_text(const Intent& intent, const std::string& text) {
@@ -157,6 +177,7 @@ ReadingsResult run_readings(const uint8_t* data, size_t size) {
         const size_t ns = mutate(buf.data(), buf.size(), buf.size(), seed_from(data, size));
         check_text(to_string(buf.data(), ns), out.violations);
         out.reach.reading1 = true;
+        out.accept.reading1 = toy_accepts(g.text);
     }
 
     // Reading 2: mutate the input directly -> oracles.
@@ -166,11 +187,13 @@ ReadingsResult run_readings(const uint8_t* data, size_t size) {
         const size_t ns = mutate(buf.data(), buf.size(), buf.size(), seed_from(data, size));
         check_text(to_string(buf.data(), ns), out.violations);
         out.reach.reading2 = true;
+        out.accept.reading2 = toy_accepts(to_string(data, size));
     }
 
     // Reading 3: generate -> the intent record must agree with the text.
     out.intent_mismatch = !intent_matches_text(g.intent, g.text);
     out.reach.reading3 = true;
+    out.accept.reading3 = text_parses(g.text);
 
     return out;
 }

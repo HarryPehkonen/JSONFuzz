@@ -81,4 +81,17 @@ TEST(ReadingsTest, NeverThrowsOnAnyInput) {
     EXPECT_NO_THROW(run_readings(in.data(), in.size()));
 }
 
+TEST(ReadingsTest, AcceptFlagsReportWhetherTheOracleLawsRan) {
+    // The accept flags are the reach measurement: an accepted parse means the oracle laws
+    // (O1 and O2) were evaluated, a rejected one means a trivial early exit. Reading 1's
+    // generated text is always valid JSON (non-adversarial options), so reading1_accept
+    // must be true; reading 3's generated text always parses, so reading3_accept must be
+    // true. Reading 2's raw input is input-dependent.
+    const std::vector<uint8_t> in = {'{', '"', 'a', '"', ':', '1', '}'};
+    const auto res = run_readings(in.data(), in.size());
+    EXPECT_TRUE(res.accept.reading1) << "reading 1's generated text should always parse";
+    EXPECT_TRUE(res.accept.reading3) << "reading 3's generated text should always parse";
+    EXPECT_TRUE(res.accept.reading2) << "this input is valid JSON, so reading 2 accepts it";
+}
+
 } // namespace

@@ -216,6 +216,36 @@ TEST(GeneratorAdversarialTest, AlphabetIsReachable) {
     EXPECT_TRUE(boundary_number) << "a grammar-boundary number was never produced";
 }
 
+TEST(GeneratorReachTest, PointerKeysReachableAtZeroAdversarialWeight) {
+    // The fuzz target runs the generator at adversarial_weight = 0 (reading 3 needs
+    // parseable text). The pointer-key class (a key holding '/' or '~') must still be
+    // reachable there, or the O2 pointer oracle can never see a '/'-key defect (measured
+    // in B3: a get() sabotage on '/'-keys survived 10 s because no such key was produced).
+    GenOptions options; // adversarial_weight = 0
+    options.max_depth = 4;
+    options.max_members = 6;
+    options.max_string = 8;
+    ToySut sut;
+    const jsonfuzz::ParseConfig cfg;
+    bool saw_pointer_key = false;
+    for (uint64_t seed = 0; seed < 1000; ++seed) {
+        const auto stream = bytes_from_seed(seed, 200);
+        ByteSource bytes(stream.data(), stream.size());
+        const Generated g = generate(options, bytes);
+        ASSERT_TRUE(sut.parse(g.text, cfg).accepted) << "text: " << g.text;
+        for (const auto& p : sut.pointers(256)) {
+            if (p.find("~1") != std::string::npos || p.find("~0") != std::string::npos) {
+                saw_pointer_key = true;
+                break;
+            }
+        }
+        if (saw_pointer_key) {
+            break;
+        }
+    }
+    EXPECT_TRUE(saw_pointer_key) << "a key holding / or ~ was never produced at weight 0";
+}
+
 TEST(GeneratorAdversarialTest, BoundaryNumberTextIsPresent) {
     GenOptions options;
     options.adversarial_weight = 100;

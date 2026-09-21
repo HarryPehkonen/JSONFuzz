@@ -14,6 +14,10 @@
 // sibling repo (117 of 9,952 corpus inputs reached the assertion there and a class-shaped
 // sabotage still survived 4.2 M executions), so each reading is counted on its own.
 //
+// REACH COUNTS: the same run also prints how many inputs actually reached each reading's
+// oracle laws (an accepted parse) versus a trivial early exit (a rejected parse). "A
+// counter is non-zero" is not evidence of reach; these numbers are.
+//
 // clang only: built by CMake with -DPROJECT_BUILD_FUZZING=ON.
 
 #include <jsonfuzz/readings.hpp>
@@ -33,7 +37,18 @@ struct ReachGuard {
     bool reading2 = false;
     bool reading3 = false;
 
+    // Reach COUNTS, accumulated across every input, so a run reports how many inputs
+    // actually reached each reading's oracle laws (accepted parse) versus a trivial
+    // early exit (rejected). "A counter is non-zero" is not evidence of reach; these
+    // numbers are.
+    size_t total = 0;
+    size_t r1_accept = 0;
+    size_t r2_accept = 0;
+    size_t r3_accept = 0;
+
     ~ReachGuard() {
+        std::fprintf(stderr, "REACH COUNTS: total=%zu r1_accept=%zu r2_accept=%zu r3_accept=%zu\n",
+                     total, r1_accept, r2_accept, r3_accept);
         if (std::getenv("JSONFUZZ_REQUIRE_REACH") == nullptr) {
             return;
         }
@@ -66,6 +81,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     g_reach.reading1 = g_reach.reading1 || res.reach.reading1;
     g_reach.reading2 = g_reach.reading2 || res.reach.reading2;
     g_reach.reading3 = g_reach.reading3 || res.reach.reading3;
+
+    ++g_reach.total;
+    g_reach.r1_accept += res.accept.reading1 ? 1 : 0;
+    g_reach.r2_accept += res.accept.reading2 ? 1 : 0;
+    g_reach.r3_accept += res.accept.reading3 ? 1 : 0;
 
     // The counters, in the stats line, so a run shows which reading reached.
     std::fprintf(stderr, "readings r1=%d r2=%d r3=%d violations=%zu intent_mismatch=%d\n",

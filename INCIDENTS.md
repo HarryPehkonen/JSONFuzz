@@ -14,7 +14,36 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
-## 2026-09-20 — a pathspec commit ran its own gate under git's TEMPORARY index
+## 2026-09-20 — the generator's pointer-key class was unreachable at the fuzz target's weight
+
+What broke:        A get() sabotage on '/'-keys (return the wrong member when the pointer's
+                   last token holds '/') survived a 10 s campaign over fuzz/seeds with zero
+                   findings. The wiring was fine — O2 would have reported it — but the trigger
+                   was never produced: the generator only emits keys holding '/' or '~' through
+                   the adversarial pointer-key branch, which needs `adversarial()` true, and the
+                   fuzz target runs the generator at `adversarial_weight = 0` (reading 3 needs
+                   parseable text). So the whole pointer-key class was unreachable in the oracle
+                   readings, and a defect that only shows up on a '/'-key could never be seen.
+                   This is the same class of reach hole the brief warns about (a sibling repo's
+                   oracle survived 4.2 M executions because only 117 of 9,952 inputs reached the
+                   assertion): "a counter is non-zero" was true, but the class was invisible.
+Check added:       `src/jsonfuzz_generator.cpp` now includes '/' and '~' in the general key
+                   alphabet (`pick_char`), so pointer keys are producible at any
+                   `adversarial_weight`, including 0. The check that pins it is
+                   `tests/test_generator.cpp` `GeneratorReachTest.PointerKeysReachableAtZeroAdversarialWeight`,
+                   which generates at weight 0 and asserts a pointer containing `~1`/`~0` is
+                   produced; it was written RED first (the failure output is in the B3 report)
+                   and the `tests` stage of the gate runs it. The B3 S2 sabotage, re-run after
+                   the fix, died in 1 s via the O2 property.
+Why it must stay:  Without '/' and '~' in the general alphabet, the pointer-key class is only
+                   reachable when the generator is run adversarially, and the fuzz target never
+                   does. Deleting the alphabet characters (or the test) re-enables the hole: a
+                   '/'-key defect in any SUT's pointer handling would again survive the fuzz
+                   campaign, and the reach counters would still read non-zero because the other
+                   readings reach. The test is the load-bearing part — it asserts the class is
+                   producible at the exact configuration the fuzz target uses.
+
+---
 
 What broke:        `git commit -- <path>` builds a TEMPORARY index and exports its path to the
                    pre-commit hook as `GIT_INDEX_FILE` (`<repo>/.git/next-index-XXXXXX.lock`).

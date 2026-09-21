@@ -231,8 +231,12 @@ private:
     }
 
     char pick_char() {
+        // '/' and '~' are in the general alphabet (not only the adversarial pointer-key
+        // branch) so pointer keys are reachable even at adversarial_weight = 0, the
+        // configuration the fuzz target uses (measured in B3: a get() sabotage on '/'
+        // keys survived 10 s because no such key was produced at weight 0).
         static const char* chars
-            = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.,:;!?()[]{}";
+            = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.,:;!?()[]{}~/";
         return chars[pick(static_cast<int>(std::strlen(chars)))];
     }
 
