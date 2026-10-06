@@ -14,9 +14,9 @@
     },
     {
       "name": "format-checks-staged",
-      "from_revision": "96719c4",
+      "from_revision": "96719c44d7e20816a440bce22a8260bb7e15f639",
       "probe": "probes/format-checks-staged.sh",
-      "adopted_in": "7f9f71b"
+      "adopted_in": "53e3883"
     }
   ],
   "declined_fixes": [],
