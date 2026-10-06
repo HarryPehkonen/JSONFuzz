@@ -95,7 +95,7 @@
     {
       "repo_path": "tools/kit-probes/optimized-stage.sh",
       "kit_path": "probes/optimized-stage.sh",
-      "repo_sha256": "d0d7a184ebbe7847c1366983b0b6ff72c86eb2ea2eaba130aa46b132b0a29c25",
+      "repo_sha256": "9f81fa9f8f3bde0987dae5ff188dba26f00de203de3648a5f4ffe9d5b73907c2",
       "kit_sha256": "9f81fa9f8f3bde0987dae5ff188dba26f00de203de3648a5f4ffe9d5b73907c2",
       "adapted": false
     },

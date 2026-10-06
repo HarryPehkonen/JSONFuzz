@@ -103,11 +103,22 @@ printf '%s' "$body" | grep -qF 'run_tests "$CI_RELEASE_BUILD_DIR"' \
     && printf '%s' "$body" | grep -qF 's|\$CI_BUILD_DIR|$CI_RELEASE_BUILD_DIR|'
 check $? "it runs the test command in its own build dir (the suite runs optimized too)"
 
-# R5 — it is in the tier that runs.
-if grep -E '^CI_DEFAULT_STAGES=' "$S" | grep -qw 'release'; then
-    check 0 "release is in CI_DEFAULT_STAGES — the stage actually runs"
+# R5 — it is in the tier that runs. The default may spell the list out, or be one of the tier
+# variables (`${CI_DEFAULT_STAGES:-$CI_FULL_STAGES}`) — the shape the hook-tier fix gave it. Read
+# the list the default RESOLVES to, not the spelling of the assignment: a check that reads the
+# spelling fails on a gate that runs the stage, which is a false positive, and the useful kind of
+# probe is the one whose failures are all real.
+default_stages=$(sed -n 's/^CI_DEFAULT_STAGES=${CI_DEFAULT_STAGES:-"\(.*\)"}/\1/p' "$S" | head -1)
+if [ -z "${default_stages:-}" ] && grep -qF 'CI_DEFAULT_STAGES:-$CI_FULL_STAGES}' "$S"; then
+    default_stages=$(sed -n 's/^CI_FULL_STAGES=${CI_FULL_STAGES:-"\(.*\)"}/\1/p' "$S" | head -1)
+fi
+if [ -z "${default_stages:-}" ] && grep -qF 'CI_DEFAULT_STAGES:-$CI_FAST_STAGES}' "$S"; then
+    default_stages=$(sed -n 's/^CI_FAST_STAGES=${CI_FAST_STAGES:-"\(.*\)"}/\1/p' "$S" | head -1)
+fi
+if printf '%s' "${default_stages:-}" | grep -qw 'release'; then
+    check 0 "release is in the default stage list ($(printf '%s' "$default_stages" | tr ' ' ',' | cut -c1-60)) — the stage actually runs"
 else
-    check 1 "release is NOT in CI_DEFAULT_STAGES — the stage exists but never runs"
+    check 1 "release is NOT in the default stage list — the stage exists but never runs"
 fi
 
 # R6 — the tree stage knows its build dir.
