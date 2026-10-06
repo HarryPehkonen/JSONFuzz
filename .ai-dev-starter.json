@@ -4,14 +4,14 @@
   "revision": "9f3ff726ae5bcf0b45ccde51d2582a6dd0b0edab",
   "recorded_at": "2026-09-20",
   "record_kind": "at-copy",
-  "record_note": "Wired from the kit at the published revision 9f3ff726. The four kit fixes (tidy-baseline, gate-stage-guards, optimized-stage, git-index-file) are carried verbatim as probes in tools/kit-probes/ and their fixes are present in tools/ci.sh. adopted_fixes is intentionally EMPTY: adopted_in must name a commit in THIS repo, and nothing is committed yet (the orchestrator commits; the two-commit shape lands then). tools/kit-probes/consumer-subdirectory.sh is deliberately NOT listed here: it is a repo-local probe holding our own rule (a consumer gets JSONFuzz::core and nothing else), not a kit fix, and files[]/adopted_fixes are for artifacts that came FROM the kit. See the JSONFUZZ ADAPTATIONS item 6 in tools/ci.sh.",
+  "record_note": "Wired from the kit at the published revision 9f3ff726. The four kit fixes (tidy-baseline, gate-stage-guards, optimized-stage, git-index-file) are carried verbatim as probes in tools/kit-probes/ and their fixes are present in tools/ci.sh. adopted_fixes is intentionally EMPTY: adopted_in must name a commit in THIS repo, and nothing is committed yet (the orchestrator commits; the two-commit shape lands then). tools/kit-probes/consumer-subdirectory.sh is deliberately NOT listed here: it is a repo-local probe holding our own rule (a consumer gets JSONFuzz::core and nothing else), not a kit fix, and files[]/adopted_fixes are for artifacts that came FROM the kit. See the JSONFUZZ ADAPTATIONS item 6 in tools/ci.sh. **2026-10-06, record re-hash:** the checker reported this record BAD on repo_sha256 mismatch for 2 entries, edited after the record was written without this file being updated in the same commit \u2014 the one rule the convention says keeps it true. Re-hashed, no other field changed: tools/ci.sh (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else); INCIDENTS.md (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else). **2026-10-06, same card:** the checker also failed INCIDENTS.md on `adapted: false` with a file that is not byte-identical to the kit \u2014 it is the kit's log plus this repo's own entries, so the flag is corrected to `adapted: true` with the reason. No bytes were changed.",
   "adopted_fixes": [],
   "declined_fixes": [],
   "files": [
     {
       "repo_path": "tools/ci.sh",
       "kit_path": "templates/cpp/ci.sh",
-      "repo_sha256": "20ff3a112640bf75c163f12c8a5fa97db74e5fd38f180929ac2f2205ec2117e3",
+      "repo_sha256": "e137f8166ee64d44987bb081120f655e57176791a3798ada779e5702ae2df8bb",
       "kit_sha256": "166e0042aa81ce24874c994a756e0c62d435da31398cd8d79d81d7600e554191",
       "adapted": true,
       "adapted_why": "JSONFUZZ ADAPTATIONS block: adds docs/cli/fuzz stages, hooks pass no stage list, version header/binaries paths, source globs, fuzz build dir and seconds."
@@ -43,9 +43,10 @@
     {
       "repo_path": "INCIDENTS.md",
       "kit_path": "INCIDENTS.md",
-      "repo_sha256": "e6e636dbdd3e26c727aff5045c8d50427d79c41011b0c6ace1172e76ca099e0f",
+      "repo_sha256": "3aac6344a35012086f4834ec7b46dbea14564f3623111ea4b3b5c95c62b5a1c6",
       "kit_sha256": "e6e636dbdd3e26c727aff5045c8d50427d79c41011b0c6ace1172e76ca099e0f",
-      "adapted": false
+      "adapted": true,
+      "adapted_why": "copied from the kit and then appended to: it keeps the kit's history and then this repo's own incidents (337 lines against the kit's 272 at 9f3ff72). A sync must diff it, never overwrite it."
     },
     {
       "repo_path": "CLAUDE.md",
