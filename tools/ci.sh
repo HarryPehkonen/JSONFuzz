@@ -18,9 +18,8 @@
 #
 # Two tiers, because a C++ full run is minutes and a commit cannot afford minutes:
 #
-#   fast  (pre-commit)  build tests
-#   full  (pre-push)    --require-clean tree format kitprobes build tests release version
-#                       asan tsan tidy pristine
+#   fast  (pre-commit)  tree format build tests
+#   full  (pre-push)    --require-clean tree docs format kitprobes build tests release cli version asan fuzz tsan tidy pristine
 #
 # Configuration lives in .ci.env (gitignored, optional); every knob has a default here,
 # so the repo works with no config at all. See .ci.env.example.
@@ -109,7 +108,8 @@ CI_LOG_DIR=${CI_LOG_DIR:-.ci-logs}
 CI_STRICT_TOOLS=${CI_STRICT_TOOLS:-0}           # 1 = a missing tool fails instead of SKIPping
 CI_KEEP_TMP=${CI_KEEP_TMP:-0}                   # 1 = keep the pristine temp dir for inspection
 CI_DEFAULT_STAGES=${CI_DEFAULT_STAGES:-"tree docs format kitprobes build tests release cli version asan fuzz tsan tidy pristine"}
-CI_FAST_STAGES=${CI_FAST_STAGES:-"tree build tests"}
+# `format` joined the fast tier on 2026-10-06 — see INCIDENTS.md.
+CI_FAST_STAGES=${CI_FAST_STAGES:-"tree format build tests"}
 CI_TIDY_BASELINE=${CI_TIDY_BASELINE:-.ci/tidy-baseline.txt}
 CI_BUILD_TYPE=${CI_BUILD_TYPE:-Debug}
 # The SECOND configuration, built and tested by the `release` stage. A gate whose every

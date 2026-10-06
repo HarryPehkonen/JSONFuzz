@@ -14,6 +14,25 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-10-06 — the header comment described a gate that no longer existed
+
+What broke:        Two things had drifted behind the tier fix this repo took early. The header comment
+                   still printed `build tests` for the fast tier and a full list ending at
+                   `release version` — nine stages where the gate defines fourteen — so the file that
+                   explains the gate described a different one. And `format` was not in the fast tier,
+                   which is the check that let an unformatted commit through in FSMTable on the same
+                   day.
+Check added:       The comment prints the two variables verbatim, and tools/kit-probes/
+                   hook-tiers-agree.sh (kitprobes stage) fails when it stops matching them, when a
+                   hook names a stage instead of a tier, when a stage the gate defines is in no tier,
+                   or when the fast tier is not a subset of the full one. `format` joins
+                   CI_FAST_STAGES.
+Why it must stay:  A stale stage list in the header is read as current — this repo's own reason for
+                   generating its docs tables. The probe makes the comment and the variables one
+                   claim, so neither can move alone.
+
+---
+
 ## 2026-09-20 — JSONFuzz could not be taken in as somebody else's subdirectory, and the workaround was worse than the bug
 
 What broke:        Pulling JSONFuzz into another project with `FetchContent_MakeAvailable` /
