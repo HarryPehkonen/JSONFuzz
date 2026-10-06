@@ -1,18 +1,25 @@
 {
   "kit": "AI-DEV-STARTER",
   "url": "https://github.com/HarryPehkonen/AI-DEV-STARTER",
-  "revision": "9f3ff726ae5bcf0b45ccde51d2582a6dd0b0edab",
+  "revision": "919006ecf90cfcc7627e008c6bee165754962d93",
   "recorded_at": "2026-09-20",
   "record_kind": "at-copy",
-  "record_note": "Wired from the kit at the published revision 9f3ff726. The four kit fixes (tidy-baseline, gate-stage-guards, optimized-stage, git-index-file) are carried verbatim as probes in tools/kit-probes/ and their fixes are present in tools/ci.sh. adopted_fixes is intentionally EMPTY: adopted_in must name a commit in THIS repo, and nothing is committed yet (the orchestrator commits; the two-commit shape lands then). tools/kit-probes/consumer-subdirectory.sh is deliberately NOT listed here: it is a repo-local probe holding our own rule (a consumer gets JSONFuzz::core and nothing else), not a kit fix, and files[]/adopted_fixes are for artifacts that came FROM the kit. See the JSONFUZZ ADAPTATIONS item 6 in tools/ci.sh. **2026-10-06, record re-hash:** the checker reported this record BAD on repo_sha256 mismatch for 2 entries, edited after the record was written without this file being updated in the same commit \u2014 the one rule the convention says keeps it true. Re-hashed, no other field changed: tools/ci.sh (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else); INCIDENTS.md (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else). **2026-10-06, same card:** the checker also failed INCIDENTS.md on `adapted: false` with a file that is not byte-identical to the kit \u2014 it is the kit's log plus this repo's own entries, so the flag is corrected to `adapted: true` with the reason. No bytes were changed.",
-  "adopted_fixes": [],
+  "record_note": "Wired from the kit at the published revision 9f3ff726. The four kit fixes (tidy-baseline, gate-stage-guards, optimized-stage, git-index-file) are carried verbatim as probes in tools/kit-probes/ and their fixes are present in tools/ci.sh. adopted_fixes is intentionally EMPTY: adopted_in must name a commit in THIS repo, and nothing is committed yet (the orchestrator commits; the two-commit shape lands then). tools/kit-probes/consumer-subdirectory.sh is deliberately NOT listed here: it is a repo-local probe holding our own rule (a consumer gets JSONFuzz::core and nothing else), not a kit fix, and files[]/adopted_fixes are for artifacts that came FROM the kit. See the JSONFUZZ ADAPTATIONS item 6 in tools/ci.sh. **2026-10-06, record re-hash:** the checker reported this record BAD on repo_sha256 mismatch for 2 entries, edited after the record was written without this file being updated in the same commit \u2014 the one rule the convention says keeps it true. Re-hashed, no other field changed: tools/ci.sh (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else); INCIDENTS.md (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else). **2026-10-06, same card:** the checker also failed INCIDENTS.md on `adapted: false` with a file that is not byte-identical to the kit \u2014 it is the kit's log plus this repo's own entries, so the flag is corrected to `adapted: true` with the reason. No bytes were changed. **2026-10-06, hook-tier port:** adopted_fixes gains hook-tiers-agree and the revision moves to 919006e, that probe's copy point, with every kit_sha256 re-read there. tools/ci.sh and INCIDENTS.md are re-hashed. The tier variables and the hooks' `--fast`/`--full` dialect were already here; what this port fixed is that the header comment had drifted from the variables and that `format` was missing from the fast tier.",
+  "adopted_fixes": [
+    {
+      "name": "hook-tiers-agree",
+      "from_revision": "919006ecf90cfcc7627e008c6bee165754962d93",
+      "probe": "probes/hook-tiers-agree.sh",
+      "adopted_in": "9408838"
+    }
+  ],
   "declined_fixes": [],
   "files": [
     {
       "repo_path": "tools/ci.sh",
       "kit_path": "templates/cpp/ci.sh",
-      "repo_sha256": "e137f8166ee64d44987bb081120f655e57176791a3798ada779e5702ae2df8bb",
-      "kit_sha256": "166e0042aa81ce24874c994a756e0c62d435da31398cd8d79d81d7600e554191",
+      "repo_sha256": "798d2f6357f4e27de84bab08595f8bab3aad7bdc6e6f167c2fb30aac09f6ba92",
+      "kit_sha256": "da4c8a4085b06f2e710ca36a8c4818cf417875633706d7ea78014789c6544021",
       "adapted": true,
       "adapted_why": "JSONFUZZ ADAPTATIONS block: adds docs/cli/fuzz stages, hooks pass no stage list, version header/binaries paths, source globs, fuzz build dir and seconds."
     },
@@ -28,7 +35,7 @@
       "repo_path": ".githooks/pre-commit",
       "kit_path": "templates/hooks/pre-commit",
       "repo_sha256": "d3c67d2cd7535d0b12b09ecbc8730ff459feb417b4af178971527d0928f12e52",
-      "kit_sha256": "e304ddcb48e216029c8e77402d927695dae4895532f6bf12d1ecb54604b652d8",
+      "kit_sha256": "c87ea669b3716917a8de098697107b2afe867fbbdd519d5db68ce077f24e445e",
       "adapted": true,
       "adapted_why": "Passes no stage list (--fast): CI_FAST_STAGES in tools/ci.sh is the one definition of the fast tier."
     },
@@ -36,14 +43,14 @@
       "repo_path": ".githooks/pre-push",
       "kit_path": "templates/hooks/pre-push",
       "repo_sha256": "08477413e878d62a6cffe34b57baa4b7e868b01e7183b3081e2d37cde14b4b49",
-      "kit_sha256": "f3ee3909b042ba74728f09b8c68aa2a82f23fe212ebea1f79aae89f5cef9ca07",
+      "kit_sha256": "ad7380d39fc6c425d2ced5972be828832f704d395fbd17d3676768bfa33dcf10",
       "adapted": true,
       "adapted_why": "Passes no stage list (--require-clean --full): CI_DEFAULT_STAGES in tools/ci.sh is the one definition of the full tier."
     },
     {
       "repo_path": "INCIDENTS.md",
       "kit_path": "INCIDENTS.md",
-      "repo_sha256": "3aac6344a35012086f4834ec7b46dbea14564f3623111ea4b3b5c95c62b5a1c6",
+      "repo_sha256": "eb9e6111e18c48ef6883ce27d8e5190a1a4c72e22f0fb67fb3b8a6f8d0c1691e",
       "kit_sha256": "e6e636dbdd3e26c727aff5045c8d50427d79c41011b0c6ace1172e76ca099e0f",
       "adapted": true,
       "adapted_why": "copied from the kit and then appended to: it keeps the kit's history and then this repo's own incidents (337 lines against the kit's 272 at 9f3ff72). A sync must diff it, never overwrite it."
@@ -60,7 +67,7 @@
       "repo_path": ".gitignore",
       "kit_path": ".gitignore",
       "repo_sha256": "18eb8f5bc7154f2c8864070f4d35f9380263c36303cd59e8319c7e7b22c8ec72",
-      "kit_sha256": "c597d47ba50ca7a4d0527e816bc893f0564aa9fe08796a36e2342a23bdf8b543",
+      "kit_sha256": "47219f5906c1835982a9bea4f0802e9f9b0c97cba48aca3946cbaad18d488fcf",
       "adapted": true,
       "adapted_why": "Adds JSONFuzz-specific rules: fuzz/corpus/ and *.intent.json ignored; fuzz/seeds/ and fuzz/regressions/ tracked."
     },
@@ -89,7 +96,7 @@
       "repo_path": "tools/kit-probes/optimized-stage.sh",
       "kit_path": "probes/optimized-stage.sh",
       "repo_sha256": "d0d7a184ebbe7847c1366983b0b6ff72c86eb2ea2eaba130aa46b132b0a29c25",
-      "kit_sha256": "d0d7a184ebbe7847c1366983b0b6ff72c86eb2ea2eaba130aa46b132b0a29c25",
+      "kit_sha256": "9f81fa9f8f3bde0987dae5ff188dba26f00de203de3648a5f4ffe9d5b73907c2",
       "adapted": false
     },
     {
@@ -97,6 +104,13 @@
       "kit_path": "probes/git-index-file.sh",
       "repo_sha256": "6818e5d5b049edc250dc5b7cd1e620917cf80afef0bbade83b8cbb690ddc27e6",
       "kit_sha256": "6818e5d5b049edc250dc5b7cd1e620917cf80afef0bbade83b8cbb690ddc27e6",
+      "adapted": false
+    },
+    {
+      "repo_path": "tools/kit-probes/hook-tiers-agree.sh",
+      "kit_path": "probes/hook-tiers-agree.sh",
+      "repo_sha256": "736481101f4b9b4ce4379048c0be9c165b883ba7e27b424b3864aa32725564d1",
+      "kit_sha256": "736481101f4b9b4ce4379048c0be9c165b883ba7e27b424b3864aa32725564d1",
       "adapted": false
     }
   ]
