@@ -1,8 +1,8 @@
 {
   "kit": "AI-DEV-STARTER",
   "url": "https://github.com/HarryPehkonen/AI-DEV-STARTER",
-  "revision": "919006ecf90cfcc7627e008c6bee165754962d93",
-  "recorded_at": "2026-09-20",
+  "revision": "98e517d3655919c44d0a8df936b16c430281acfe",
+  "recorded_at": "2026-10-06",
   "record_kind": "at-copy",
   "record_note": "Wired from the kit at the published revision 9f3ff726. The four kit fixes (tidy-baseline, gate-stage-guards, optimized-stage, git-index-file) are carried verbatim as probes in tools/kit-probes/ and their fixes are present in tools/ci.sh. adopted_fixes is intentionally EMPTY: adopted_in must name a commit in THIS repo, and nothing is committed yet (the orchestrator commits; the two-commit shape lands then). tools/kit-probes/consumer-subdirectory.sh is deliberately NOT listed here: it is a repo-local probe holding our own rule (a consumer gets JSONFuzz::core and nothing else), not a kit fix, and files[]/adopted_fixes are for artifacts that came FROM the kit. See the JSONFUZZ ADAPTATIONS item 6 in tools/ci.sh. **2026-10-06, record re-hash:** the checker reported this record BAD on repo_sha256 mismatch for 2 entries, edited after the record was written without this file being updated in the same commit \u2014 the one rule the convention says keeps it true. Re-hashed, no other field changed: tools/ci.sh (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else); INCIDENTS.md (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else). **2026-10-06, same card:** the checker also failed INCIDENTS.md on `adapted: false` with a file that is not byte-identical to the kit \u2014 it is the kit's log plus this repo's own entries, so the flag is corrected to `adapted: true` with the reason. No bytes were changed. **2026-10-06, hook-tier port:** adopted_fixes gains hook-tiers-agree and the revision moves to 919006e, that probe's copy point, with every kit_sha256 re-read there. tools/ci.sh and INCIDENTS.md are re-hashed. The tier variables and the hooks' `--fast`/`--full` dialect were already here; what this port fixed is that the header comment had drifted from the variables and that `format` was missing from the fast tier.",
   "adopted_fixes": [
@@ -11,6 +11,12 @@
       "from_revision": "919006ecf90cfcc7627e008c6bee165754962d93",
       "probe": "probes/hook-tiers-agree.sh",
       "adopted_in": "9408838"
+    },
+    {
+      "name": "format-checks-staged",
+      "from_revision": "96719c4",
+      "probe": "probes/format-checks-staged.sh",
+      "adopted_in": "7f9f71b"
     }
   ],
   "declined_fixes": [],
@@ -18,8 +24,8 @@
     {
       "repo_path": "tools/ci.sh",
       "kit_path": "templates/cpp/ci.sh",
-      "repo_sha256": "798d2f6357f4e27de84bab08595f8bab3aad7bdc6e6f167c2fb30aac09f6ba92",
-      "kit_sha256": "da4c8a4085b06f2e710ca36a8c4818cf417875633706d7ea78014789c6544021",
+      "repo_sha256": "e9db2542edd1bcddf9db57cd5423cf52f8179d5cc1076023e9cf90b72a195d49",
+      "kit_sha256": "b50a5a82b13464932cea058b5b5eca5a93c2474f2a089fea82392271d12db018",
       "adapted": true,
       "adapted_why": "JSONFUZZ ADAPTATIONS block: adds docs/cli/fuzz stages, hooks pass no stage list, version header/binaries paths, source globs, fuzz build dir and seconds."
     },
@@ -111,6 +117,12 @@
       "kit_path": "probes/hook-tiers-agree.sh",
       "repo_sha256": "736481101f4b9b4ce4379048c0be9c165b883ba7e27b424b3864aa32725564d1",
       "kit_sha256": "736481101f4b9b4ce4379048c0be9c165b883ba7e27b424b3864aa32725564d1",
+      "adapted": false
+    },
+    {
+      "repo_path": "tools/kit-probes/format-checks-staged.sh",
+      "kit_path": "probes/format-checks-staged.sh",
+      "repo_sha256": "513e9231c31cbc9cb2faa0576fcbc7459f75967b79654825ffc8a648ab29c657",
       "adapted": false
     }
   ]
