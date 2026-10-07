@@ -13,13 +13,13 @@ builds and runs, and no document in this repo quotes a test count.
 
 | What | Command |
 |---|---|
-| Run the gate (do this before you claim anything works) | `tools/ci.sh` |
-| Fast tier (pre-commit) | `tools/ci.sh build tests` |
-| Tests only | `tools/ci.sh tests` |
-| Build only | `tools/ci.sh build` |
+| Run the gate (do this before you claim anything works) | `scripts/gate.sh` |
+| Fast tier (pre-commit) | `scripts/gate.sh --tier fast` |
+| Tests only | `scripts/gate.sh tests` |
+| Build only | `scripts/gate.sh build` |
 | Format the files you touched | `clang-format -i <files>` |
-| Fuzz smoke (10 s) | `tools/ci.sh fuzz` |
-| CLI smoke | `tools/ci.sh cli` |
+| Fuzz smoke (10 s) | `scripts/gate.sh fuzz` |
+| CLI smoke | `scripts/gate.sh cli` |
 | Build the CLI | `cmake --build build -j$(nproc)` and run `./build/jsonfuzz --version` |
 | One-time per clone: arm the hooks | `git config core.hooksPath .githooks` |
 
@@ -64,8 +64,8 @@ The seams: `include/jsonfuzz/version.hpp` is CMake-generated from `project(JSONF
   runs a `-runs=0` seed smoke plus `CI_FUZZ_SECONDS` seconds.
 - A defect the fuzzer finds becomes a tracked file in `fuzz/regressions/` AND a test.
 - Commits: conventional-commit shape, one logical change each.
-- The gate is `tools/ci.sh`, forked from the AI-DEV-STARTER kit. Every deviation from the
-  template is written in the `JSONFUZZ ADAPTATIONS` block at the top of `tools/ci.sh` and
+- The gate is `scripts/gate.sh`, forked from the AI-DEV-STARTER kit. Every deviation from the
+  template is written in the `JSONFUZZ ADAPTATIONS` block at the top of `scripts/gate.sh` and
   in `.ai-dev-starter.json`.
 
 ## Gotchas
@@ -73,12 +73,12 @@ The seams: `include/jsonfuzz/version.hpp` is CMake-generated from `project(JSONF
 <!-- APPEND-ONLY. One line each, newest first, and each one is a real incident. -->
 
 - The `tree` stage fails while work is uncommitted and untracked. During a session run the
-  stages by name (`tools/ci.sh build tests`, `tools/ci.sh fuzz`, ...) and commit only when
+  stages by name (`scripts/gate.sh --tier fast`, `scripts/gate.sh fuzz`, ...) and commit only when
   the orchestrator asks; the full default run is the committed-tree gate.
 - The fuzz target is clang-only: build it with `-DPROJECT_BUILD_FUZZING=ON` and a clang
   compiler (the `fuzz` stage does this in its own `build-fuzz` dir). It will not build with
   the default compiler.
-- `CI_VERSION_HEADER` and `CI_VERSION_BINARIES` are repo-set in `tools/ci.sh` to point at
+- `CI_VERSION_HEADER` and `CI_VERSION_BINARIES` are repo-set in `scripts/gate.sh` to point at
   `build/generated/jsonfuzz/version.hpp` and `build/jsonfuzz` — see the ADAPTATIONS block.
 
 ## Do not

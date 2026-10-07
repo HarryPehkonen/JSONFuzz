@@ -129,20 +129,20 @@ guard that hid the blind spot in Permuto).
 The repo is wired from `~/hermes-workspace/AI-DEV-STARTER` (kit HEAD
 `9f3ff726ae5bcf0b45ccde51d2582a6dd0b0edab`, confirmed published with `git ls-remote origin`):
 
-- copy, per `PLUNK-IN.md`: `templates/cpp/ci.sh` → `tools/ci.sh`, `templates/cpp/.ci.env.example`
+- copy, per `PLUNK-IN.md`: `templates/cpp/ci.sh` → `scripts/gate.sh`, `templates/cpp/.ci.env.example`
   → `.ci.env.example`, `templates/hooks/{pre-commit,pre-push}` → `.githooks/` (mode 100755),
   `INCIDENTS.md`, `templates/CLAUDE.md.template` → `CLAUDE.md` (fill every placeholder — you can
   write this file; a Hermes agent cannot, the protected-file guard refuses it unattended),
   `.gitignore` from PLUNK-IN step 3, and `LICENSE` = **Unlicense**.
 - `git config core.hooksPath .githooks`; two hooks: pre-commit runs the fast tier
   (`tree build tests`), pre-push runs the full set with `--require-clean`. Neither hook passes a
-  stage list — `CI_DEFAULT_STAGES` in `tools/ci.sh` stays the one definition.
+  stage list — `CI_DEFAULT_STAGES` in `scripts/gate.sh` stays the one definition.
 - `CI_DEFAULT_STAGES="tree docs format kitprobes build tests release cli version asan fuzz tsan tidy pristine"`.
   `docs` carries the owner's rule: no file in `CI_DOCS_FILES` may quote a test count (badge,
   prose, label or parenthetical form); `INCIDENTS.md` is exempt with the reason written in the stage.
   `CI_FUZZ_SECONDS=10`.
 - Adopt the kit's probes: copy `probes/{tidy-baseline,gate-stage-guards,optimized-stage,git-index-file}.sh`
-  into `tools/kit-probes/` and make the `kitprobes` stage run them against `tools/ci.sh`; all four
+  into `tools/kit-probes/` and make the `kitprobes` stage run them against `scripts/gate.sh`; all four
   must print VERIFIED (the kit's HEAD template implements all four fixes — if one fails, the port
   is wrong, not the probe).
 - `.ai-dev-starter.json` with `record_kind: "at-copy"`, `revision` = the kit HEAD above,
@@ -150,7 +150,7 @@ The repo is wired from `~/hermes-workspace/AI-DEV-STARTER` (kit HEAD
   listed under `adopted_fixes` (with `adopted_in` naming the commit in THIS repo — so two commits
   per adoption, artifact first, record-only second; that is the convention, see
   `AI-DEV-STARTER/docs/KIT-REVISION-CONVENTION.md`).
-- A `JSONFUZZ ADAPTATIONS` block at the top of `tools/ci.sh` listing every deviation and why.
+- A `JSONFUZZ ADAPTATIONS` block at the top of `scripts/gate.sh` listing every deviation and why.
 - `.clang-format` (LLVM-derived, 4-space, 100 columns — the suite's convention) and a
   repo-scoped `.clang-tidy` (`bugprone-*`,`performance-*`, positive `HeaderFilterRegex` matching
   only `include/jsonfuzz/.*\.hpp$|JSONFuzz/(src|tests|fuzz)/.*\.cpp$` — an unfiltered run lints
@@ -190,10 +190,10 @@ The repo is wired from `~/hermes-workspace/AI-DEV-STARTER` (kit HEAD
 
 ## Evidence you must produce (exact commands and real output, in your report)
 
-- **R1** `tools/ci.sh build tests` → `GATE PASSED`; and `tools/ci.sh --list` showing the stages.
-- **R2** `tools/ci.sh fuzz` and `tools/ci.sh cli` → green; paste the four counters from the
+- **R1** `scripts/gate.sh --tier fast` → `GATE PASSED`; and `kit-ci --list` showing the stages.
+- **R2** `scripts/gate.sh fuzz` and `scripts/gate.sh cli` → green; paste the four counters from the
   `-runs=0` seed smoke with `JSONFUZZ_REQUIRE_REACH=1`.
-- **R3** the four kit probes run VERIFIED against `tools/ci.sh` (one command, real output).
+- **R3** the four kit probes run VERIFIED against `scripts/gate.sh` (one command, real output).
 - **R4** **the oracle has teeth — three sabotages, in a `/tmp` copy, each found inside the 10 s
   budget, with a clean control run first:** (S1) the generator emits a trailing comma before a
   closer; (S2) the string-escape mutation operator drops the backslash; (S3) class-shaped — the

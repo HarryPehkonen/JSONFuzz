@@ -1,0 +1,88 @@
+# JSONFuzz's gate. The policy is this file; the engine is kit-ci, installed once per
+# machine (build KitCI, then: cmake --install build --prefix ~/.local).
+#
+# One definition, three callers - by hand (scripts/gate.sh), git on commit and on push
+# (.githooks/, which names the tier), and a nightly clean checkout (the same
+# scripts/gate.sh in a fresh clone). Changing the gate means editing this file:
+# `kit-ci --list` and `kit-ci --graph` read the same parse the run uses.
+#
+# Until 2026-10-06 the gate WAS one file: a 923-line tools/ci.sh. Every stage it ran is
+# declared here, in the order it ran them, and the work of a stage that needs more than
+# one command lives in a script next to this file. What could not be expressed in this
+# vocabulary, and how each case was resolved, is in INCIDENTS.md and in the notes below.
+
+[gate]
+repo = "jsonfuzz"
+
+# pre-commit: seconds, not minutes (the old CI_FAST_STAGES, unchanged).
+[tier.fast]
+stages = ["tree", "format", "build", "tests"]
+
+# pre-push: every stage. The old hook passed `--require-clean full`; kit-ci has no
+# per-run flags, so the hook sets CI_REQUIRE_CLEAN=1 in the environment instead and
+# scripts/tree.sh reads it - same rule, same caller.
+[tier.full]
+stages = ["*"]
+
+# ---------------------------------------------------------------- the stages
+# Declaration order IS the run order for tier.full, and it is the order the old
+# CI_FULL_STAGES used:
+#   tree docs format build tests release cli version asan fuzz tsan tidy pristine
+# (`kitprobes` sat in that list too; it did NOT survive the conversion - a probe checks
+# a FILE, and the file it checked (tools/ci.sh) is gone. The closing note in this file
+# says how each guarantee it stood for got its new home.)
+
+[stage.tree]
+cmd = "scripts/tree.sh"
+
+[stage.docs]
+cmd = "scripts/docs.sh"
+
+[stage.format]
+cmd = "scripts/format.sh"
+when = "tool:clang-format"
+
+[stage.build]
+cmd = "scripts/build.sh"
+timeout = 0     # a cold compile on a slow machine is not a failure
+
+[stage.tests]
+cmd = "scripts/tests.sh"
+
+[stage.release]
+cmd = "scripts/release.sh"
+timeout = 0     # a cold compile on a slow machine is not a failure
+
+[stage.cli]
+cmd = "scripts/cli.sh"
+
+[stage.version]
+cmd = "scripts/version.sh"
+
+[stage.asan]
+cmd = "scripts/asan.sh"
+timeout = 0     # a cold compile on a slow machine is not a failure
+
+[stage.fuzz]
+cmd = "scripts/fuzz.sh"
+when = "tool:clang++"
+timeout = 0     # a cold compile on a slow machine is not a failure
+
+[stage.tsan]
+cmd = "scripts/tsan.sh"
+timeout = 0     # a cold compile on a slow machine is not a failure
+
+[stage.tidy]
+cmd = "scripts/tidy.sh"
+timeout = 0     # a cold compile on a slow machine is not a failure
+when = "tool:clang-tidy"
+
+[stage.pristine]
+cmd = "scripts/pristine.sh"
+timeout = 0     # a cold compile on a slow machine is not a failure
+
+# ---------------------------------------------------------------- what did not survive
+# `kitprobes` - the stage that ran tools/kit-probes/*.sh, holding this copy to the
+# AI-DEV-STARTER fixes it claimed to carry. Its subject was tools/ci.sh, which this
+# conversion deletes, so the probes are deleted with it and every guarantee they stood
+# for is recorded in INCIDENTS.md with the file that now carries it.

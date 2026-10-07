@@ -208,7 +208,7 @@ endforeach()
 # ================================
 # Code quality (developer targets)
 # ================================
-# Keep this glob set in step with CI_SOURCE_GLOBS in tools/ci.sh (the format gate).
+# Keep this glob set in step with CI_SOURCE_GLOBS in scripts/gate.sh (the format gate).
 file(GLOB JSONFUZZ_FORMAT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/jsonfuzz/*.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp

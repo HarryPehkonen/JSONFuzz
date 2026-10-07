@@ -4,35 +4,52 @@
   "revision": "98e517d3655919c44d0a8df936b16c430281acfe",
   "recorded_at": "2026-10-06",
   "record_kind": "at-copy",
-  "record_note": "Wired from the kit at the published revision 9f3ff726. The four kit fixes (tidy-baseline, gate-stage-guards, optimized-stage, git-index-file) are carried verbatim as probes in tools/kit-probes/ and their fixes are present in tools/ci.sh. adopted_fixes is intentionally EMPTY: adopted_in must name a commit in THIS repo, and nothing is committed yet (the orchestrator commits; the two-commit shape lands then). tools/kit-probes/consumer-subdirectory.sh is deliberately NOT listed here: it is a repo-local probe holding our own rule (a consumer gets JSONFuzz::core and nothing else), not a kit fix, and files[]/adopted_fixes are for artifacts that came FROM the kit. See the JSONFUZZ ADAPTATIONS item 6 in tools/ci.sh. **2026-10-06, record re-hash:** the checker reported this record BAD on repo_sha256 mismatch for 2 entries, edited after the record was written without this file being updated in the same commit \u2014 the one rule the convention says keeps it true. Re-hashed, no other field changed: tools/ci.sh (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else); INCIDENTS.md (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else). **2026-10-06, same card:** the checker also failed INCIDENTS.md on `adapted: false` with a file that is not byte-identical to the kit \u2014 it is the kit's log plus this repo's own entries, so the flag is corrected to `adapted: true` with the reason. No bytes were changed. **2026-10-06, hook-tier port:** adopted_fixes gains hook-tiers-agree and the revision moves to 919006e, that probe's copy point, with every kit_sha256 re-read there. tools/ci.sh and INCIDENTS.md are re-hashed. The tier variables and the hooks' `--fast`/`--full` dialect were already here; what this port fixed is that the header comment had drifted from the variables and that `format` was missing from the fast tier.",
-  "adopted_fixes": [
+  "record_note": "Wired from the kit at the published revision 9f3ff726. The four kit fixes (tidy-baseline, gate-stage-guards, optimized-stage, git-index-file) are carried verbatim as probes in tools/kit-probes/ and their fixes are present in tools/ci.sh. adopted_fixes is intentionally EMPTY: adopted_in must name a commit in THIS repo, and nothing is committed yet (the orchestrator commits; the two-commit shape lands then). tools/kit-probes/consumer-subdirectory.sh is deliberately NOT listed here: it is a repo-local probe holding our own rule (a consumer gets JSONFuzz::core and nothing else), not a kit fix, and files[]/adopted_fixes are for artifacts that came FROM the kit. See the JSONFUZZ ADAPTATIONS item 6 in tools/ci.sh. **2026-10-06, record re-hash:** the checker reported this record BAD on repo_sha256 mismatch for 2 entries, edited after the record was written without this file being updated in the same commit — the one rule the convention says keeps it true. Re-hashed, no other field changed: tools/ci.sh (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else); INCIDENTS.md (last edited d375d7a 2026-09-21 build: a consumer gets JSONFuzz::core and nothing else). **2026-10-06, same card:** the checker also failed INCIDENTS.md on `adapted: false` with a file that is not byte-identical to the kit — it is the kit's log plus this repo's own entries, so the flag is corrected to `adapted: true` with the reason. No bytes were changed. **2026-10-06, hook-tier port:** adopted_fixes gains hook-tiers-agree and the revision moves to 919006e, that probe's copy point, with every kit_sha256 re-read there. tools/ci.sh and INCIDENTS.md are re-hashed. The tier variables and the hooks' `--fast`/`--full` dialect were already here; what this port fixed is that the header comment had drifted from the variables and that `format` was missing from the fast tier. **2026-10-06, card t_075c0a6f (KitCI fleet batch 2 of 3):** the gate is no longer a bash script. tools/ci.sh and the probes under tools/kit-probes/ are DELETED; the gate is the tracked gate.toml (13 stages, tiers fast/full) run by kit-ci, plus scripts/gate-env.sh, scripts/gate.sh and one scripts/<stage>.sh per stage — all of them this repo's own files, which is why none appears in files[] below. files[] loses tools/ci.sh and every tools/kit-probes/*.sh entry: the artifacts are gone, so no hash can describe them. The kit fixes those probes guarded move from adopted_fixes to declined_fixes — not because the fixes were declined, but because the artifact they CHECK no longer exists (each probe is written against a single bash gate file; measured against scripts/gate.sh, see INCIDENTS.md for the verdicts). The contracts did not go: each one has a named home, listed in INCIDENTS.md entry by entry. .githooks/pre-commit and .githooks/pre-push are RE-HASHED because this commit edits them: they now NAME a tier (--tier fast, and --tier full with CI_REQUIRE_CLEAN=1, the old --require-clean flag moved into the environment), and their branch for this repo's own tools/ci.sh is gone with that file. `revision` and every other entry are UNCHANGED: nothing here came from the kit, and being behind the kit is not a failure.",
+  "adopted_fixes": [],
+  "declined_fixes": [
     {
-      "name": "hook-tiers-agree",
-      "from_revision": "919006ecf90cfcc7627e008c6bee165754962d93",
-      "probe": "probes/hook-tiers-agree.sh",
-      "adopted_in": "9408838"
+      "name": "consumer-subdirectory",
+      "probe": "probes/consumer-subdirectory.sh",
+      "why": "not applicable: it guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it — the gate is gate.toml (13 stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads GREEN. The contract it held did not go — see the 2026-10-06 entry in INCIDENTS.md and the paragraph in record_note for where it lives now."
     },
     {
       "name": "format-checks-staged",
-      "from_revision": "96719c44d7e20816a440bce22a8260bb7e15f639",
       "probe": "probes/format-checks-staged.sh",
-      "adopted_in": "53e3883"
+      "why": "not applicable: it guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it — the gate is gate.toml (13 stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads GREEN. The contract it held did not go — see the 2026-10-06 entry in INCIDENTS.md and the paragraph in record_note for where it lives now.",
+      "from_revision": "96719c44d7e20816a440bce22a8260bb7e15f639"
+    },
+    {
+      "name": "gate-stage-guards",
+      "probe": "probes/gate-stage-guards.sh",
+      "why": "not applicable: it guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it — the gate is gate.toml (13 stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads RED. The contract it held did not go — see the 2026-10-06 entry in INCIDENTS.md and the paragraph in record_note for where it lives now."
+    },
+    {
+      "name": "git-index-file",
+      "probe": "probes/git-index-file.sh",
+      "why": "not applicable: it guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it — the gate is gate.toml (13 stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads GREEN. The contract it held did not go — see the 2026-10-06 entry in INCIDENTS.md and the paragraph in record_note for where it lives now."
+    },
+    {
+      "name": "hook-tiers-agree",
+      "probe": "probes/hook-tiers-agree.sh",
+      "why": "not applicable: it guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it — the gate is gate.toml (13 stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads RED. The contract it held did not go — see the 2026-10-06 entry in INCIDENTS.md and the paragraph in record_note for where it lives now.",
+      "from_revision": "919006ecf90cfcc7627e008c6bee165754962d93"
+    },
+    {
+      "name": "optimized-stage",
+      "probe": "probes/optimized-stage.sh",
+      "why": "not applicable: it guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it — the gate is gate.toml (13 stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads RED. The contract it held did not go — see the 2026-10-06 entry in INCIDENTS.md and the paragraph in record_note for where it lives now."
+    },
+    {
+      "name": "tidy-baseline",
+      "probe": "probes/tidy-baseline.sh",
+      "why": "not applicable: it guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it — the gate is gate.toml (13 stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads RED. The contract it held did not go — see the 2026-10-06 entry in INCIDENTS.md and the paragraph in record_note for where it lives now."
     }
   ],
-  "declined_fixes": [],
   "files": [
-    {
-      "repo_path": "tools/ci.sh",
-      "kit_path": "templates/cpp/ci.sh",
-      "repo_sha256": "e9db2542edd1bcddf9db57cd5423cf52f8179d5cc1076023e9cf90b72a195d49",
-      "kit_sha256": "b50a5a82b13464932cea058b5b5eca5a93c2474f2a089fea82392271d12db018",
-      "adapted": true,
-      "adapted_why": "JSONFUZZ ADAPTATIONS block: adds docs/cli/fuzz stages, hooks pass no stage list, version header/binaries paths, source globs, fuzz build dir and seconds."
-    },
     {
       "repo_path": ".ci.env.example",
       "kit_path": "templates/cpp/.ci.env.example",
-      "repo_sha256": "e2d00eb22f637e413cebb39def459013d7184751fe2fc97930da1b4b53686529",
+      "repo_sha256": "6ec77f54afb981e51bee25133b08c252c4414c45b8921a2f8ef13bf23d96a6bc",
       "kit_sha256": "eee5264aaa1b120fcd76685879559aae15bbf0fe39c45cfb0c4726d026709556",
       "adapted": true,
       "adapted_why": "Adds the JSONFuzz fuzz/version knobs (CI_FUZZ_SECONDS, CI_FUZZ_BUILD_DIR, CI_VERSION_HEADER, CI_VERSION_BINARIES)."
@@ -40,7 +57,7 @@
     {
       "repo_path": ".githooks/pre-commit",
       "kit_path": "templates/hooks/pre-commit",
-      "repo_sha256": "d3c67d2cd7535d0b12b09ecbc8730ff459feb417b4af178971527d0928f12e52",
+      "repo_sha256": "b8f25123c908669e9ad177ee7a14b147333a9844cfecba5992aeda699aed70cd",
       "kit_sha256": "c87ea669b3716917a8de098697107b2afe867fbbdd519d5db68ce077f24e445e",
       "adapted": true,
       "adapted_why": "Passes no stage list (--fast): CI_FAST_STAGES in tools/ci.sh is the one definition of the fast tier."
@@ -48,7 +65,7 @@
     {
       "repo_path": ".githooks/pre-push",
       "kit_path": "templates/hooks/pre-push",
-      "repo_sha256": "08477413e878d62a6cffe34b57baa4b7e868b01e7183b3081e2d37cde14b4b49",
+      "repo_sha256": "3f53d11eb6e0eec247a0d91893c701d4f740c635a8130c76232c1cf3f74f93b5",
       "kit_sha256": "ad7380d39fc6c425d2ced5972be828832f704d395fbd17d3676768bfa33dcf10",
       "adapted": true,
       "adapted_why": "Passes no stage list (--require-clean --full): CI_DEFAULT_STAGES in tools/ci.sh is the one definition of the full tier."
@@ -56,7 +73,7 @@
     {
       "repo_path": "INCIDENTS.md",
       "kit_path": "INCIDENTS.md",
-      "repo_sha256": "eb9e6111e18c48ef6883ce27d8e5190a1a4c72e22f0fb67fb3b8a6f8d0c1691e",
+      "repo_sha256": "af03688401546a7d82c23b3e8cf975571363a79e9aeef7da6bc8797de5c40af4",
       "kit_sha256": "e6e636dbdd3e26c727aff5045c8d50427d79c41011b0c6ace1172e76ca099e0f",
       "adapted": true,
       "adapted_why": "copied from the kit and then appended to: it keeps the kit's history and then this repo's own incidents (337 lines against the kit's 272 at 9f3ff72). A sync must diff it, never overwrite it."
@@ -82,47 +99,6 @@
       "kit_path": "LICENSE",
       "repo_sha256": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e",
       "kit_sha256": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e",
-      "adapted": false
-    },
-    {
-      "repo_path": "tools/kit-probes/tidy-baseline.sh",
-      "kit_path": "probes/tidy-baseline.sh",
-      "repo_sha256": "efd9bbca108bb7bd1e527d95d09546c1b3bceca451054367b2fed6f92bfc6379",
-      "kit_sha256": "efd9bbca108bb7bd1e527d95d09546c1b3bceca451054367b2fed6f92bfc6379",
-      "adapted": false
-    },
-    {
-      "repo_path": "tools/kit-probes/gate-stage-guards.sh",
-      "kit_path": "probes/gate-stage-guards.sh",
-      "repo_sha256": "0a9f752c5081d6cc61b0f478ebee356d1358c7aca9562643411249901178be86",
-      "kit_sha256": "0a9f752c5081d6cc61b0f478ebee356d1358c7aca9562643411249901178be86",
-      "adapted": false
-    },
-    {
-      "repo_path": "tools/kit-probes/optimized-stage.sh",
-      "kit_path": "probes/optimized-stage.sh",
-      "repo_sha256": "9f81fa9f8f3bde0987dae5ff188dba26f00de203de3648a5f4ffe9d5b73907c2",
-      "kit_sha256": "9f81fa9f8f3bde0987dae5ff188dba26f00de203de3648a5f4ffe9d5b73907c2",
-      "adapted": false
-    },
-    {
-      "repo_path": "tools/kit-probes/git-index-file.sh",
-      "kit_path": "probes/git-index-file.sh",
-      "repo_sha256": "6818e5d5b049edc250dc5b7cd1e620917cf80afef0bbade83b8cbb690ddc27e6",
-      "kit_sha256": "6818e5d5b049edc250dc5b7cd1e620917cf80afef0bbade83b8cbb690ddc27e6",
-      "adapted": false
-    },
-    {
-      "repo_path": "tools/kit-probes/hook-tiers-agree.sh",
-      "kit_path": "probes/hook-tiers-agree.sh",
-      "repo_sha256": "736481101f4b9b4ce4379048c0be9c165b883ba7e27b424b3864aa32725564d1",
-      "kit_sha256": "736481101f4b9b4ce4379048c0be9c165b883ba7e27b424b3864aa32725564d1",
-      "adapted": false
-    },
-    {
-      "repo_path": "tools/kit-probes/format-checks-staged.sh",
-      "kit_path": "probes/format-checks-staged.sh",
-      "repo_sha256": "513e9231c31cbc9cb2faa0576fcbc7459f75967b79654825ffc8a648ab29c657",
       "adapted": false
     }
   ]

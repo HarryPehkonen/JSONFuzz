@@ -12,25 +12,23 @@
 #
 # Deliberate bypass when you need one:  git commit --no-verify
 #
+# 2026-10-06 (card t_075c0a6f): the gate IS gate.toml now, run by kit-ci, so this hook NAMES A
+# TIER instead of repeating a stage list — the list lives in one place, gate.toml's
+# [tier.fast], and a hook that names the tier cannot drift from it. The kit's `tools/ci.sh`
+# branch is gone with the file it tested.
 set -uo pipefail
 
 root=$(git rev-parse --show-toplevel) || exit 1
 
-# C++: a full run is minutes, so commit gets only the fast tier. The tier composition
-# (CI_FAST_STAGES: tree build tests) lives in tools/ci.sh — this hook passes NO stage
-# list, so CI_DEFAULT_STAGES/CI_FAST_STAGES stay the one definition (JSONFUZZ ADAPTATIONS).
-if [ -x "$root/tools/ci.sh" ]; then
-    exec "$root/tools/ci.sh" --fast
-fi
-
-# Deno / Python: the whole gate is already seconds. Run all of it here so a broken
-# commit never leaves your machine.
+# C++: a full run is minutes, so commit gets the fast tier — the list gate.toml declares as
+# [tier.fast]. Everything else (the sanitizers, fuzz, tidy, the clean-checkout stage) belongs
+# to pre-push.
 if [ -x "$root/scripts/gate.sh" ]; then
-    exec "$root/scripts/gate.sh"
+    exec "$root/scripts/gate.sh" --tier fast
 fi
 
 # No gate found is a failure, not a warning: a silently unarmed gate is worse than
 # no gate, because it looks armed.
-printf 'pre-commit: no gate found. Expected %s/tools/ci.sh (C++) or %s/scripts/gate.sh (deno/python).\n' \
-    "$root" "$root" >&2
+printf 'pre-commit: no gate found. Expected %s/scripts/gate.sh (with gate.toml next to it).\n' \
+    "$root" >&2
 exit 1

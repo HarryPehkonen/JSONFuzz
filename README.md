@@ -35,15 +35,15 @@ JSON.
 
 | What | Command |
 |---|---|
-| Run the gate | `tools/ci.sh` |
-| Fast tier (pre-commit) | `tools/ci.sh build tests` |
+| Run the gate | `scripts/gate.sh` |
+| Fast tier (pre-commit) | `scripts/gate.sh --tier fast` |
 | Build the CLI | `cmake --build build -j$(nproc)` then `./build/jsonfuzz --version` |
 | Generate a document | `./build/jsonfuzz gen` (add `--intent <file>` for the sidecar) |
 | Mutate a document | `./build/jsonfuzz mutate --in <file> --op <name> --seed <n>` |
 | Check a document | `./build/jsonfuzz check --sut <name> --in <file>` |
 | List operators / SUTs | `./build/jsonfuzz --list-ops` / `./build/jsonfuzz --list-suts` |
-| CLI smoke | `tools/ci.sh cli` |
-| Fuzz smoke (10 s) | `tools/ci.sh fuzz` |
+| CLI smoke | `scripts/gate.sh cli` |
+| Fuzz smoke (10 s) | `scripts/gate.sh fuzz` |
 
 Exit codes: `0` ok, `1` an oracle violation, `2` usage error, `3` no such SUT.
 
