@@ -188,6 +188,21 @@ TEST(CliTest, CheckBrokenSutExitsOneAndPrintsTheViolation) {
     EXPECT_NE(r.out.find("does not reparse"), std::string::npos);
 }
 
+TEST(CliTest, CheckRunsTheV03LawsAndPrintsTheStructuredViolation) {
+    // "broken-sibling" answers get() with the NEXT sibling's value: valid JSON, wrong
+    // member — invisible to O1/O2, so only the v0.3 pointer-value law (O3) can report it.
+    // The report must name the law, the pointer, what was expected and what came back.
+    const std::string in = temp_path("check_sibling.json");
+    write_file(in, R"({"a":1,"b":2})");
+    const RunResult r = run({"check", "--sut", "broken-sibling", "--in", in});
+    ::remove(in.c_str());
+    ASSERT_EQ(r.status, 1) << "output: " << r.out;
+    EXPECT_NE(r.out.find("O3 pointer-value violation"), std::string::npos) << r.out;
+    EXPECT_NE(r.out.find("pointer: /a"), std::string::npos) << r.out;
+    EXPECT_NE(r.out.find("expected: 1"), std::string::npos) << r.out;
+    EXPECT_NE(r.out.find("actual: 2"), std::string::npos) << r.out;
+}
+
 TEST(CliTest, CheckMissingArgumentsIsUsageError) {
     const RunResult r = run({"check", "--sut", "toy"});
     EXPECT_EQ(r.status, 2);
@@ -208,4 +223,5 @@ TEST(CliTest, ListSutsNamesTheToyAndTheBrokenDouble) {
     ASSERT_EQ(r.status, 0);
     EXPECT_NE(r.out.find("toy"), std::string::npos);
     EXPECT_NE(r.out.find("broken-comma"), std::string::npos);
+    EXPECT_NE(r.out.find("broken-sibling"), std::string::npos);
 }

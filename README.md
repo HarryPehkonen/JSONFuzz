@@ -1,7 +1,7 @@
 # JSONFuzz
 
 A parser-agnostic, structure-aware JSON fuzzer. JSONFuzz generates and mutates JSON with
-intent, and checks any parser behind a small interface against two fixed-point laws. It is
+intent, and checks any parser behind a small interface against seven oracle laws. It is
 built so a parser (JSOM is the first adapter, in a later brief) can be fuzzed by byte
 mutation *and* coordinated structure from the same deterministic byte stream.
 
@@ -20,11 +20,30 @@ tests and fuzz target use a deliberately-correct toy SUT.
   kind, break number grammar, adversarial escapes, unbalance brackets, mismatch closers,
   inject invalid UTF-8, swap members). One entry point is shaped for libFuzzer; the same
   operators are usable directly.
-- **Check** — two oracle laws against any `SystemUnderTest`:
+- **Check** — oracle laws against any `SystemUnderTest`. The two v0.1 fixed-point laws
+  catch output that does not reparse:
   - **O1 fixed point / round trip**: if `parse(x)` is accepted, then `serialize()` must
     reparse and `serialize()` of that reparse must be byte-identical.
   - **O2 pointer contract**: every pointer the SUT returns must be non-empty, must be
     returned by `get()` as valid JSON, and `get(p)` must itself reparse.
+
+  The v0.3 laws catch **wrong-but-valid** answers (each is its own function in
+  `include/jsonfuzz/oracle.hpp`, with its limits written next to it):
+  - **O3 pointer value**: `get(p)` equals what an independent walk (nlohmann, the toolkit's
+    own model) of the canonical text finds at `p`.
+  - **O4 set-then-remove**: setting a fresh pointer and removing it returns the canonical
+    text to what it was (and `get` sees the value in between).
+  - **O5 preset agreement**: every serialization mode reparses to the same document and is
+    byte-stable.
+  - **O6 number text**: if the SUT *declares* that number text survives a round trip,
+    every number token of the input appears in the reparsed canonical text.
+  - **O7 strict ⊆ lazy**: whatever `strict_numbers` accepts, the lazy grammar accepts too,
+    to the same canonical text (one direction only).
+
+  The v0.3 capabilities a law needs (`set`/`remove`, serialization modes, the number-text
+  promise) are optional on the interface: a SUT that does not offer one is *skipped* by
+  that law, never failed by it. Every law returns structured violations (law, input,
+  pointer, expected, actual) and never throws; `check` prints them.
 
 The error path is `try { parse } catch { return; }` and the property runs **outside every
 catch** — a broad `catch` around the property turns a wrong answer into "expected for
@@ -74,12 +93,11 @@ and has one test.
 
 ## What this does NOT do yet
 
+What the oracle laws still cannot see is measured in `docs/fuzz-oracle-reach.md`.
+
 - **v0.2** — the JSOM adapter and an `LLVMFuzzerCustomMutator` linked into JSOM's existing
   harness (one campaign gets byte mutation *and* structure, no new binary), with the reach
   measurement before/after.
-- **v0.3** — the rest of the oracle set: formatter-preset agreement, pointer-vs-independent
-  walk, set-then-remove inverse (adds the write verbs), lazy-number text preservation,
-  strict-accepts ⊆ lazy-accepts.
 - **v0.4** — the differential oracle: feed the same bytes to two parsers (JSOM and
   nlohmann) and compare accept/reject and canonical output. It is last on purpose: a
   disagreement only tells you *something* differs, and one side may be deliberately lenient.

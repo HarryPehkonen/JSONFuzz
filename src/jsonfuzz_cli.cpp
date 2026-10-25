@@ -39,7 +39,7 @@ void print_help() {
                 "                           apply one JSON-aware mutation operator to FILE,\n"
                 "                           deterministically from the seed; result to stdout\n"
                 "  check --sut NAME --in FILE\n"
-                "                           run the two fixed-point laws against the SUT and\n"
+                "                           run every oracle law (O1..O7) against the SUT and\n"
                 "                           print each violation; exit 1 on a violation\n"
                 "\n"
                 "Flags:\n"
@@ -252,10 +252,21 @@ int cmd_check(int argc, char** argv) {
         return usage_error("cannot read --in file: " + o["in"]);
     }
     const jsonfuzz::ParseConfig cfg;
-    const auto violations = jsonfuzz::check(*sut, text, cfg);
+    // Every law, O1..O7. Each violation names its law, then the structured fields that
+    // are set: the pointer, what the law expected, what the SUT answered.
+    const auto violations = jsonfuzz::check_all(*sut, text, cfg).violations;
     for (const auto& v : violations) {
-        std::printf("%s violation: %s\n", v.law == jsonfuzz::OracleViolation::Law::O1 ? "O1" : "O2",
+        std::printf("%s violation: %s\n", std::string(jsonfuzz::law_name(v.law)).c_str(),
                     v.message.c_str());
+        if (!v.pointer.empty()) {
+            std::printf("  pointer: %s\n", v.pointer.c_str());
+        }
+        if (!v.expected.empty()) {
+            std::printf("  expected: %s\n", v.expected.c_str());
+        }
+        if (!v.actual.empty()) {
+            std::printf("  actual: %s\n", v.actual.c_str());
+        }
     }
     return violations.empty() ? 0 : 1;
 }

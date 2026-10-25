@@ -9,6 +9,7 @@
 /// The toy SUT in this header is the deliberately-correct minimal model this repo's own
 /// tests and fuzz target use before a real adapter exists.
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -19,8 +20,10 @@
 
 namespace jsonfuzz {
 
-/// Parse options a SUT may honour. The toy SUT honours max_depth and strict_numbers;
-/// the others are carried so a real adapter can read them.
+/// Parse options a SUT may honour. The toy SUT honours max_depth only: its number grammar
+/// is always strict, so it answers strict_numbers = true and = false identically (which
+/// trivially satisfies the strict-subset-of-lazy law, O7). The others are carried so a
+/// real adapter can read them.
 struct ParseConfig {
     bool allow_comments = false;
     bool unicode_escapes = false;
@@ -35,6 +38,18 @@ struct ParseConfig {
 /// JSON).
 struct ParseResult {
     bool accepted = false;
+    std::string error;
+};
+
+/// The outcome of a write verb (set / remove). Same discipline as ParseResult: a refusal is
+/// an outcome, never a throw.
+///   Applied     — the model was changed.
+///   Rejected    — the SUT refused this pointer (e.g. its parent does not exist).
+///   Unsupported — the SUT has no write path at all; the write-path law (O4) is skipped
+///                 for it rather than failed. This is the default for every SUT.
+struct WriteResult {
+    enum class Status : std::uint8_t { Applied, Rejected, Unsupported };
+    Status status = Status::Unsupported;
     std::string error;
 };
 
@@ -57,6 +72,42 @@ public:
     /// The value at `pointer`, serialized as JSON. nullopt when the pointer does not
     /// resolve (or nothing has been accepted).
     virtual std::optional<std::string> get(std::string_view pointer) const = 0;
+
+    // ---- v0.3 OPTIONAL capabilities. Each default declares "not offered", so a SUT that
+    // ---- does not implement one is skipped by the law that needs it, never failed by it.
+
+    /// Write `value_json` (a JSON text) at `pointer` in the last accepted parse: an object
+    /// member is added or replaced, an array index equal to the size (or "-") appends, a
+    /// smaller index replaces. Never throws. Default: Unsupported.
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    virtual WriteResult set(std::string_view pointer, std::string_view value_json) {
+        (void)pointer;
+        (void)value_json;
+        return {WriteResult::Status::Unsupported, "set() is not offered by this SUT"};
+    }
+
+    /// Remove the value at `pointer` (an object member or an array element) from the last
+    /// accepted parse. Never throws. Default: Unsupported.
+    virtual WriteResult remove(std::string_view pointer) {
+        (void)pointer;
+        return {WriteResult::Status::Unsupported, "remove() is not offered by this SUT"};
+    }
+
+    /// How many serialization modes (formatter presets) the SUT offers. Modes are numbered
+    /// 0 .. serialize_mode_count() - 1. JSOM has five presets; the toy has two (compact,
+    /// pretty). Default: 1 — a single mode, so the preset-agreement law (O5) is skipped.
+    virtual int serialize_mode_count() const { return 1; }
+
+    /// The last accepted parse, serialized in mode `mode`. Default: mode 0 is serialize(),
+    /// any other mode is empty.
+    virtual std::string serialize_mode(int mode) const {
+        return mode == 0 ? serialize() : std::string();
+    }
+
+    /// Does the SUT PROMISE that a number's original text survives a round trip (JSOM's
+    /// LazyNumber does)? Only a SUT that declares it is held to the number-text law (O6).
+    /// Default: false.
+    virtual bool preserves_number_text() const { return false; }
 };
 
 /// Resolves a SUT by name for the CLI (`--sut <name>`). An unknown name is a documented
@@ -96,10 +147,12 @@ private:
 /// The process-wide registry. The toy SUT is registered here as "toy" by the library.
 SutRegistry& default_registry();
 
-/// The deliberately-correct toy SUT: a minimal std::variant-style model (~100 lines)
-/// that parses, serializes, enumerates RFC 6901 pointers and resolves get(). It is
-/// strict (rejects -01, 1.0., 2.e+3, raw control characters) so the repo can be fuzzed
-/// against a correct reference before a real adapter exists.
+/// The deliberately-correct toy SUT: a minimal std::variant-style model that parses,
+/// serializes, enumerates RFC 6901 pointers and resolves get(). It is strict (rejects -01,
+/// 1.0., 2.e+3, raw control characters) so the repo can be fuzzed against a correct
+/// reference before a real adapter exists. It implements every v0.3 capability so every
+/// v0.3 law is exercised: set/remove, two serialization modes (0 compact, 1 pretty) and
+/// the number-text promise (numbers are stored as their raw token).
 class ToySut : public SystemUnderTest {
 public:
     ToySut();
@@ -108,6 +161,12 @@ public:
     std::string serialize() const override;
     std::vector<std::string> pointers(int max_depth) const override;
     std::optional<std::string> get(std::string_view pointer) const override;
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    WriteResult set(std::string_view pointer, std::string_view value_json) override;
+    WriteResult remove(std::string_view pointer) override;
+    int serialize_mode_count() const override;
+    std::string serialize_mode(int mode) const override;
+    bool preserves_number_text() const override;
 
 private:
     struct Impl;

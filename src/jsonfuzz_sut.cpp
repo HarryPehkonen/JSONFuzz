@@ -1,7 +1,9 @@
 #include <jsonfuzz/sut.hpp>
 
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <set>
 #include <utility>
 
@@ -382,6 +384,95 @@ std::string unescape_pointer_token(const std::string& token) {
     return out;
 }
 
+// The VALUE of a key: its raw (escaped) body decoded to UTF-8. RFC 6901 tokens name this,
+// not the escaped text — found by the v0.3 pointer-value law (O3) on its first run: the toy
+// enumerated /a\"b for the key written "a\"b" (the value a"b, pointer /a"b), and the
+// independent walk had no member there. A lone surrogate is encoded as its own three
+// bytes (the reference rejects such a document anyway, so O3 skips it).
+void append_utf8(std::string& out, uint32_t cp) {
+    if (cp < 0x80) {
+        out += static_cast<char>(cp);
+    } else if (cp < 0x800) {
+        out += static_cast<char>(0xC0 | (cp >> 6));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+        out += static_cast<char>(0xE0 | (cp >> 12));
+        out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
+    } else {
+        out += static_cast<char>(0xF0 | (cp >> 18));
+        out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+        out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
+    }
+}
+
+uint32_t hex4(const std::string& s, size_t at) {
+    uint32_t v = 0;
+    for (size_t k = at; k < at + 4; ++k) {
+        const char c = s[k];
+        v <<= 4;
+        if (is_digit(c)) {
+            v |= static_cast<uint32_t>(c - '0');
+        } else if (c >= 'a' && c <= 'f') {
+            v |= static_cast<uint32_t>(c - 'a' + 10);
+        } else {
+            v |= static_cast<uint32_t>(c - 'A' + 10);
+        }
+    }
+    return v;
+}
+
+// `raw` was validated by the Parser (or written by encode_key), so every escape is whole.
+std::string decode_key(const std::string& raw) {
+    if (raw.find('\\') == std::string::npos) {
+        return raw;
+    }
+    std::string out;
+    for (size_t i = 0; i < raw.size(); ++i) {
+        if (raw[i] != '\\' || i + 1 >= raw.size()) {
+            out += raw[i];
+            continue;
+        }
+        const char e = raw[++i];
+        switch (e) {
+        case 'b':
+            out += '\b';
+            break;
+        case 'f':
+            out += '\f';
+            break;
+        case 'n':
+            out += '\n';
+            break;
+        case 'r':
+            out += '\r';
+            break;
+        case 't':
+            out += '\t';
+            break;
+        case 'u': {
+            uint32_t cp = hex4(raw, i + 1);
+            i += 4;
+            if (cp >= 0xD800 && cp <= 0xDBFF && i + 6 < raw.size() && raw[i + 1] == '\\'
+                && raw[i + 2] == 'u') {
+                const uint32_t lo = hex4(raw, i + 3);
+                if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                    cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
+                    i += 6;
+                }
+            }
+            append_utf8(out, cp);
+            break;
+        }
+        default: // '"', '\\', '/'
+            out += e;
+            break;
+        }
+    }
+    return out;
+}
+
 void collect_pointers(const JsonValue& v, const std::string& ptr, int depth, int max_depth,
                       std::vector<std::string>& out) {
     out.push_back(ptr);
@@ -400,11 +491,12 @@ void collect_pointers(const JsonValue& v, const std::string& ptr, int depth, int
         // get().
         std::set<std::string> seen;
         for (const auto& kv : v.object) {
-            if (!seen.insert(kv.first).second) {
+            std::string key = decode_key(kv.first);
+            if (!seen.insert(key).second) {
                 continue;
             }
-            collect_pointers(kv.second, ptr + "/" + escape_pointer_token(kv.first), depth + 1,
-                             max_depth, out);
+            collect_pointers(kv.second, ptr + "/" + escape_pointer_token(key), depth + 1, max_depth,
+                             out);
         }
     }
 }
@@ -421,17 +513,12 @@ bool all_digits(const std::string& s) {
     return true;
 }
 
-std::optional<std::string> get_value(const JsonValue& root, std::string_view pointer) {
-    if (pointer.empty()) {
-        std::string s;
-        serialize_value(root, s);
-        return s;
-    }
-    std::vector<std::string> parts;
+// Split an RFC 6901 pointer into its unescaped tokens. False when it is not a pointer.
+bool split_pointer(std::string_view pointer, std::vector<std::string>& parts) {
     size_t i = 0;
     while (i < pointer.size()) {
         if (pointer[i] != '/') {
-            return std::nullopt;
+            return false;
         }
         ++i;
         size_t j = pointer.find('/', i);
@@ -441,39 +528,208 @@ std::optional<std::string> get_value(const JsonValue& root, std::string_view poi
         parts.push_back(unescape_pointer_token(std::string(pointer.substr(i, j - i))));
         i = j;
     }
-    const JsonValue* cur = &root;
-    for (const auto& part : parts) {
+    return true;
+}
+
+bool parse_index(const std::string& part, size_t& idx) {
+    if (!all_digits(part)) {
+        return false;
+    }
+    idx = 0;
+    for (char c : part) {
+        idx = idx * 10 + static_cast<size_t>(c - '0');
+    }
+    return true;
+}
+
+// The member a key token names: the FIRST occurrence (by decoded key), as everywhere in
+// the toy.
+template <typename Object> auto find_member(Object& object, const std::string& key) {
+    auto it = object.begin();
+    for (; it != object.end(); ++it) {
+        if (decode_key(it->first) == key) {
+            break;
+        }
+    }
+    return it;
+}
+
+// Walk the first `count` tokens of `parts` from `root`. nullptr when they do not resolve.
+// A template so the read path (get) and the write path (set/remove) share one walk.
+template <typename Value>
+Value* resolve(Value& root, const std::vector<std::string>& parts, size_t count) {
+    Value* cur = &root;
+    for (size_t k = 0; k < count; ++k) {
+        const std::string& part = parts[k];
         if (cur->kind == JsonValue::Kind::Array) {
-            if (!all_digits(part)) {
-                return std::nullopt;
-            }
             size_t idx = 0;
-            for (char c : part) {
-                idx = idx * 10 + static_cast<size_t>(c - '0');
-            }
-            if (idx >= cur->array.size()) {
-                return std::nullopt;
+            if (!parse_index(part, idx) || idx >= cur->array.size()) {
+                return nullptr;
             }
             cur = &cur->array[idx];
         } else if (cur->kind == JsonValue::Kind::Object) {
-            bool found = false;
-            for (const auto& kv : cur->object) {
-                if (kv.first == part) {
-                    cur = &kv.second;
-                    found = true;
-                    break;
-                }
+            auto it = find_member(cur->object, part);
+            if (it == cur->object.end()) {
+                return nullptr;
             }
-            if (!found) {
-                return std::nullopt;
-            }
+            cur = &it->second;
         } else {
-            return std::nullopt;
+            return nullptr;
         }
+    }
+    return cur;
+}
+
+std::optional<std::string> get_value(const JsonValue& root, std::string_view pointer) {
+    std::vector<std::string> parts;
+    if (!split_pointer(pointer, parts)) {
+        return std::nullopt;
+    }
+    const JsonValue* cur = resolve(root, parts, parts.size());
+    if (cur == nullptr) {
+        return std::nullopt;
     }
     std::string s;
     serialize_value(*cur, s);
     return s;
+}
+
+// A key as it must appear between the quotes of the canonical text.
+std::string encode_key(const std::string& key) {
+    static const char* hex = "0123456789abcdef";
+    std::string out;
+    out.reserve(key.size());
+    for (char c : key) {
+        const auto u = static_cast<unsigned char>(c);
+        if (c == '"' || c == '\\') {
+            out += '\\';
+            out += c;
+        } else if (u < 0x20) {
+            out += "\\u00";
+            out += hex[u >> 4];
+            out += hex[u & 0xF];
+        } else {
+            out += c;
+        }
+    }
+    return out;
+}
+
+WriteResult rejected(std::string why) { return {WriteResult::Status::Rejected, std::move(why)}; }
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+WriteResult set_value(JsonValue& root, std::string_view pointer, std::string_view value_json) {
+    JsonValue value;
+    const ParseConfig cfg;
+    Parser parser(value_json, cfg);
+    if (!parser.parse(value)) {
+        return rejected("value is not JSON: " + parser.error());
+    }
+    std::vector<std::string> parts;
+    if (!split_pointer(pointer, parts)) {
+        return rejected("not a JSON pointer");
+    }
+    if (parts.empty()) {
+        root = std::move(value);
+        return {WriteResult::Status::Applied, ""};
+    }
+    JsonValue* parent = resolve(root, parts, parts.size() - 1);
+    if (parent == nullptr) {
+        return rejected("the parent does not exist");
+    }
+    const std::string& last = parts.back();
+    if (parent->kind == JsonValue::Kind::Object) {
+        auto it = find_member(parent->object, last);
+        if (it != parent->object.end()) {
+            it->second = std::move(value);
+        } else {
+            parent->object.emplace_back(encode_key(last), std::move(value));
+        }
+        return {WriteResult::Status::Applied, ""};
+    }
+    if (parent->kind == JsonValue::Kind::Array) {
+        size_t idx = parent->array.size();
+        if (last != "-" && !parse_index(last, idx)) {
+            return rejected("not an array index");
+        }
+        if (idx == parent->array.size()) {
+            parent->array.push_back(std::move(value));
+        } else if (idx < parent->array.size()) {
+            parent->array[idx] = std::move(value);
+        } else {
+            return rejected("array index past the end");
+        }
+        return {WriteResult::Status::Applied, ""};
+    }
+    return rejected("the parent is a scalar");
+}
+
+WriteResult remove_value(JsonValue& root, std::string_view pointer) {
+    std::vector<std::string> parts;
+    if (!split_pointer(pointer, parts)) {
+        return rejected("not a JSON pointer");
+    }
+    if (parts.empty()) {
+        return rejected("the root cannot be removed");
+    }
+    JsonValue* parent = resolve(root, parts, parts.size() - 1);
+    if (parent == nullptr) {
+        return rejected("the parent does not exist");
+    }
+    if (parent->kind == JsonValue::Kind::Object) {
+        auto it = find_member(parent->object, parts.back());
+        if (it == parent->object.end()) {
+            return rejected("no such member");
+        }
+        parent->object.erase(it);
+        return {WriteResult::Status::Applied, ""};
+    }
+    if (parent->kind == JsonValue::Kind::Array) {
+        size_t idx = 0;
+        if (!parse_index(parts.back(), idx) || idx >= parent->array.size()) {
+            return rejected("no such element");
+        }
+        parent->array.erase(parent->array.begin() + static_cast<std::ptrdiff_t>(idx));
+        return {WriteResult::Status::Applied, ""};
+    }
+    return rejected("the parent is a scalar");
+}
+
+// Mode 1: pretty, two-space indent, one member per line, empty containers stay "{}"/"[]".
+// Scalars (and their number text) are emitted by the same code as the compact mode.
+void serialize_pretty(const JsonValue& v, std::string& out, int indent) {
+    const auto newline = [&out](int n) {
+        out += '\n';
+        out.append(static_cast<size_t>(n) * 2, ' ');
+    };
+    if (v.kind == JsonValue::Kind::Array && !v.array.empty()) {
+        out += '[';
+        for (size_t i = 0; i < v.array.size(); ++i) {
+            if (i != 0) {
+                out += ',';
+            }
+            newline(indent + 1);
+            serialize_pretty(v.array[i], out, indent + 1);
+        }
+        newline(indent);
+        out += ']';
+    } else if (v.kind == JsonValue::Kind::Object && !v.object.empty()) {
+        out += '{';
+        for (size_t i = 0; i < v.object.size(); ++i) {
+            if (i != 0) {
+                out += ',';
+            }
+            newline(indent + 1);
+            out += '"';
+            out += v.object[i].first;
+            out += "\": ";
+            serialize_pretty(v.object[i].second, out, indent + 1);
+        }
+        newline(indent);
+        out += '}';
+    } else {
+        serialize_value(v, out);
+    }
 }
 
 } // namespace
@@ -522,6 +778,38 @@ std::optional<std::string> ToySut::get(std::string_view pointer) const {
     return get_value(impl_->root, pointer);
 }
 
+WriteResult ToySut::set(std::string_view pointer, std::string_view value_json) {
+    if (!impl_->has_root) {
+        return rejected("nothing has been accepted");
+    }
+    return set_value(impl_->root, pointer, value_json);
+}
+
+WriteResult ToySut::remove(std::string_view pointer) {
+    if (!impl_->has_root) {
+        return rejected("nothing has been accepted");
+    }
+    return remove_value(impl_->root, pointer);
+}
+
+int ToySut::serialize_mode_count() const { return 2; }
+
+std::string ToySut::serialize_mode(int mode) const {
+    if (!impl_->has_root || mode < 0 || mode > 1) {
+        return "";
+    }
+    std::string out;
+    if (mode == 0) {
+        serialize_value(impl_->root, out);
+    } else {
+        serialize_pretty(impl_->root, out, 0);
+    }
+    return out;
+}
+
+// Numbers are stored as their raw token and re-emitted byte-for-byte.
+bool ToySut::preserves_number_text() const { return true; }
+
 struct BrokenCommaSut::Impl {
     ToySut toy;
 };
@@ -550,6 +838,50 @@ std::optional<std::string> BrokenCommaSut::get(std::string_view pointer) const {
     return impl_->toy.get(pointer);
 }
 
+namespace {
+
+// A deliberately-broken SUT, registered as "broken-sibling": the toy, except that get() of
+// an object member answers with the NEXT sibling's value (when there is one). Valid JSON,
+// wrong member — the class O1/O2 cannot see — so the CLI `check` verb and the v0.3
+// pointer-value law (O3) can be exercised end-to-end against a known-bad adapter. NOT used
+// by the fuzz target.
+class BrokenSiblingSut : public SystemUnderTest {
+public:
+    ParseResult parse(std::string_view text, const ParseConfig& config) override {
+        Parser parser(text, config);
+        JsonValue root;
+        if (parser.parse(root)) {
+            root_ = std::move(root);
+        }
+        return toy_.parse(text, config);
+    }
+    std::string serialize() const override { return toy_.serialize(); }
+    std::vector<std::string> pointers(int max_depth) const override {
+        return toy_.pointers(max_depth);
+    }
+    std::optional<std::string> get(std::string_view pointer) const override {
+        std::vector<std::string> parts;
+        if (split_pointer(pointer, parts) && !parts.empty()) {
+            const JsonValue* parent = resolve(root_, parts, parts.size() - 1);
+            if (parent != nullptr && parent->kind == JsonValue::Kind::Object) {
+                auto it = find_member(parent->object, parts.back());
+                if (it != parent->object.end() && std::next(it) != parent->object.end()) {
+                    std::string s;
+                    serialize_value(std::next(it)->second, s);
+                    return s;
+                }
+            }
+        }
+        return toy_.get(pointer);
+    }
+
+private:
+    ToySut toy_;
+    JsonValue root_;
+};
+
+} // namespace
+
 SutRegistry& default_registry() {
     static SutRegistry registry;
     return registry;
@@ -564,6 +896,8 @@ struct ToyRegistrar {
         default_registry().register_sut("toy", [] { return std::make_unique<ToySut>(); });
         default_registry().register_sut("broken-comma",
                                         [] { return std::make_unique<BrokenCommaSut>(); });
+        default_registry().register_sut("broken-sibling",
+                                        [] { return std::make_unique<BrokenSiblingSut>(); });
     }
 };
 ToyRegistrar toy_registrar;

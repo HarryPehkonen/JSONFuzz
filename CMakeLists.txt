@@ -145,6 +145,7 @@ add_executable(jsonfuzz_tests
     tests/test_generator.cpp
     tests/test_mutate.cpp
     tests/test_oracle.cpp
+    tests/test_oracle_laws.cpp
     tests/test_readings.cpp
 )
     target_link_libraries(jsonfuzz_tests PRIVATE jsonfuzz_core gtest gtest_main)

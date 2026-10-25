@@ -95,3 +95,29 @@ TEST(ReadingsTest, AcceptFlagsReportWhetherTheOracleLawsRan) {
 }
 
 } // namespace
+
+namespace {
+
+TEST(ReadingsTest, EveryOracleLawIsEvaluatedByTheReadings) {
+    // The v0.3 laws must run inside the readings, not just exist: on an accepted object
+    // input every law O1..O7 is EVALUATED (not skipped) against the toy, and is clean.
+    const std::vector<uint8_t> in = {'{', '"', 'a', '"', ':', '[', '-', '0', ']', '}'};
+    const auto res = run_readings(in.data(), in.size());
+    for (size_t i = 0; i < jsonfuzz::kLawCount; ++i) {
+        EXPECT_TRUE(res.law_evaluated[i]) << "law index " << i << " never ran in the readings";
+    }
+    EXPECT_TRUE(res.violations.empty());
+}
+
+TEST(ReadingsTest, AV03ViolationReachesTheReadingsResult) {
+    // A violation found by a v0.3 law must surface in the readings' violation list (the fuzz
+    // target traps on it). The regression input is reading 2's raw text; against the fixed
+    // toy it is clean, and every law it reaches is evaluated.
+    const std::string text = R"({"a\"b":1,"cA":[true]})";
+    const std::vector<uint8_t> in(text.begin(), text.end());
+    const auto res = run_readings(in.data(), in.size());
+    EXPECT_TRUE(res.violations.empty()) << res.violations.front().message;
+    EXPECT_TRUE(res.law_evaluated[jsonfuzz::law_index(jsonfuzz::OracleViolation::Law::O3)]);
+}
+
+} // namespace

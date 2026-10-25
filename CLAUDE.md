@@ -3,8 +3,8 @@
 ## What this is
 
 JSONFuzz is a parser-agnostic, structure-aware JSON fuzzer: it generates and mutates
-JSON with intent, and checks any parser behind a small interface against two fixed-point
-laws. It is built so a parser (JSOM is the first adapter, in a later brief) can be fuzzed
+JSON with intent, and checks any parser behind a small interface against oracle laws
+(O1..O7). It is built so a parser (JSOM is the first adapter, in a later brief) can be fuzzed
 by byte mutation *and* coordinated structure from the same deterministic byte stream.
 "Working" means: the repo builds and tests green under the local gate, the fuzz target
 builds and runs, and no document in this repo quotes a test count.

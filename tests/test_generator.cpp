@@ -246,6 +246,59 @@ TEST(GeneratorReachTest, PointerKeysReachableAtZeroAdversarialWeight) {
     EXPECT_TRUE(saw_pointer_key) << "a key holding / or ~ was never produced at weight 0";
 }
 
+TEST(GeneratorReachTest, NumberTextFormsReachableAtZeroAdversarialWeight) {
+    // The number-text law (O6) can only see a serializer that rewrites a number's TEXT
+    // (-0 -> 0, 1E5 -> 1e5, 1e+2 -> 1e2, 1.50 -> 1.5, a long integer -> a double) if those
+    // forms reach it, and the fuzz target generates at adversarial_weight = 0. Measured in
+    // B5: a "-0 -> 0" sabotage survived a 10 s campaign because a bare -0 was rare at weight
+    // 0 and E / e+ / long integers were not produced at all. Every form must appear, and a
+    // bare -0 must not be rare (at least one number-bearing document in 25 holds one).
+    GenOptions options; // adversarial_weight = 0
+    ToySut sut;
+    const jsonfuzz::ParseConfig cfg;
+    int docs_with_numbers = 0;
+    int docs_with_negative_zero = 0;
+    bool saw_upper_e = false;
+    bool saw_plus_exponent = false;
+    bool saw_trailing_fraction_zero = false;
+    bool saw_long_integer = false;
+    for (uint64_t seed = 0; seed < 1000; ++seed) {
+        const auto stream = bytes_from_seed(seed, 200);
+        ByteSource bytes(stream.data(), stream.size());
+        const Generated g = generate(options, bytes);
+        ASSERT_TRUE(sut.parse(g.text, cfg).accepted) << "text: " << g.text;
+        bool has_number = false;
+        bool has_negative_zero = false;
+        for (const auto& p : sut.pointers(256)) {
+            const std::string v = *sut.get(p);
+            if (v.empty() || !(v[0] == '-' || (v[0] >= '0' && v[0] <= '9'))) {
+                continue;
+            }
+            has_number = true;
+            has_negative_zero = has_negative_zero || v == "-0";
+            saw_upper_e = saw_upper_e || v.find('E') != std::string::npos;
+            saw_plus_exponent = saw_plus_exponent || v.find("e+") != std::string::npos
+                                || v.find("E+") != std::string::npos;
+            const auto dot = v.find('.');
+            const auto end = v.find_first_of("eE");
+            const std::string frac = dot == std::string::npos ? "" : v.substr(dot, end - dot);
+            saw_trailing_fraction_zero
+                = saw_trailing_fraction_zero || (frac.size() > 1 && frac.back() == '0');
+            saw_long_integer = saw_long_integer
+                               || (v.find_first_of(".eE") == std::string::npos && v.size() >= 20);
+        }
+        docs_with_numbers += has_number ? 1 : 0;
+        docs_with_negative_zero += has_negative_zero ? 1 : 0;
+    }
+    EXPECT_TRUE(saw_upper_e) << "no 'E' exponent at weight 0";
+    EXPECT_TRUE(saw_plus_exponent) << "no '+' exponent sign at weight 0";
+    EXPECT_TRUE(saw_trailing_fraction_zero) << "no fraction ending in 0 at weight 0";
+    EXPECT_TRUE(saw_long_integer) << "no integer of 20+ digits at weight 0";
+    EXPECT_GE(docs_with_negative_zero * 25, docs_with_numbers)
+        << "a bare -0 is rare at weight 0: " << docs_with_negative_zero << " of "
+        << docs_with_numbers << " number-bearing documents";
+}
+
 TEST(GeneratorAdversarialTest, BoundaryNumberTextIsPresent) {
     GenOptions options;
     options.adversarial_weight = 100;

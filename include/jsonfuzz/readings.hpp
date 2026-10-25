@@ -16,6 +16,7 @@
 #include <jsonfuzz/generator.hpp>
 #include <jsonfuzz/oracle.hpp>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -48,6 +49,10 @@ struct ReadingsResult {
     ReadingAccept accept;
     std::vector<OracleViolation> violations; // from readings 1 & 2 (the toy SUT)
     bool intent_mismatch = false;            // reading 3: the intent disagreed with the text
+    // Per oracle law (index law_index(L)): was L's property EVALUATED on any of readings 1
+    // & 2's texts for this input? A law that is never evaluated is starved, however many
+    // inputs the readings themselves reached.
+    std::array<bool, kLawCount> law_evaluated{};
 };
 
 /// Run the three readings on `data[0..size)`. Never throws. A violation or an intent

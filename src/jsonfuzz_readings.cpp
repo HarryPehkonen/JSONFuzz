@@ -119,12 +119,18 @@ std::string to_string(const uint8_t* data, size_t size) {
     return s;
 }
 
-// Run both oracles against a fresh toy SUT on `text`, appending any violations.
-void check_text(const std::string& text, std::vector<OracleViolation>& out) {
+// Run every oracle law (O1..O7) against a fresh toy SUT on `text`, appending any
+// violations and recording which laws were evaluated.
+void check_text(const std::string& text, ReadingsResult& res) {
     ToySut sut;
     const ParseConfig cfg;
-    std::vector<OracleViolation> v = check(sut, text, cfg);
-    out.insert(out.end(), v.begin(), v.end());
+    OracleReport report = check_all(sut, text, cfg);
+    for (auto& v : report.violations) {
+        res.violations.push_back(std::move(v));
+    }
+    for (std::size_t i = 0; i < kLawCount; ++i) {
+        res.law_evaluated[i] = res.law_evaluated[i] || report.evaluated[i];
+    }
 }
 
 // Does the toy SUT accept `text`? The toy never throws, so acceptance means the oracle
@@ -170,22 +176,22 @@ ReadingsResult run_readings(const uint8_t* data, size_t size) {
     ByteSource bytes(data, size);
     const Generated g = generate(options, bytes);
 
-    // Reading 1: generate -> mutate -> oracles.
+    // Reading 1: generate -> mutate -> oracles (every law, O1..O7).
     {
-        check_text(g.text, out.violations);
+        check_text(g.text, out);
         std::vector<uint8_t> buf(g.text.begin(), g.text.end());
         const size_t ns = mutate(buf.data(), buf.size(), buf.size(), seed_from(data, size));
-        check_text(to_string(buf.data(), ns), out.violations);
+        check_text(to_string(buf.data(), ns), out);
         out.reach.reading1 = true;
         out.accept.reading1 = toy_accepts(g.text);
     }
 
     // Reading 2: mutate the input directly -> oracles.
     {
-        check_text(to_string(data, size), out.violations);
+        check_text(to_string(data, size), out);
         std::vector<uint8_t> buf(data, data + size);
         const size_t ns = mutate(buf.data(), buf.size(), buf.size(), seed_from(data, size));
-        check_text(to_string(buf.data(), ns), out.violations);
+        check_text(to_string(buf.data(), ns), out);
         out.reach.reading2 = true;
         out.accept.reading2 = toy_accepts(to_string(data, size));
     }

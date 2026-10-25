@@ -14,6 +14,46 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-10-25 — a "-0 -> 0" serializer survived the number-text law because the fuzz target never generated the forms
+
+What broke:        B5 sabotage S7 (the toy serializer emitting the number text `-0` as `0`)
+                   survived a 10 s campaign over fuzz/seeds with zero findings, although the
+                   new O6 number-text law reports `[-0]` immediately when given it. Same class
+                   as the 2026-09-20 pointer-key entry: the fuzz target generates at
+                   `adversarial_weight = 0`, short libFuzzer inputs are zero-padded by
+                   ByteSource, the zero tail generated `0.0e0`, and the forms a text-preserving
+                   serializer can rewrite (`E`, `e+`, 20+ digit integers) were not produced at
+                   all. The law existed, the counters were non-zero, the class was invisible.
+Check added:       `src/jsonfuzz_generator.cpp` emits number-TEXT forms at any weight (`-0` at
+                   index 0, so the zero tail picks it) and a wider exponent grammar (`e`/`E`,
+                   optional `+`/`-`, at most two digits so the reference still parses it).
+                   `tests/test_generator.cpp`
+                   `GeneratorReachTest.NumberTextFormsReachableAtZeroAdversarialWeight` (RED
+                   first, `tests` stage). Re-run: S7 died in 0.28 s.
+Why it must stay:  Without the forms, O6 runs on every input and sees nothing: a `-0`, `1E5` or
+                   `1e+2` rewrite in any SUT that promises number-text preservation (JSOM's
+                   LazyNumber) would pass the campaign. `1e309` is still NOT reachable
+                   (docs/fuzz-oracle-reach.md, S7b) — do not read this check as covering it.
+
+---
+
+## 2026-10-25 — the toy SUT named keys by their escaped text, and O2 could not see it
+
+What broke:        The toy enumerated and resolved RFC 6901 pointers by a key's RAW escaped body:
+                   for `{"a\"b":1}` it emitted `/a\"b` where RFC 6901 names the decoded key
+                   (`/a"b`). O2 passed it (the toy was consistent with itself); the first run
+                   of the v0.3 O3 pointer-value law (independent nlohmann walk) reported it.
+Check added:       The toy decodes keys for enumeration, lookup and duplicate detection.
+                   `fuzz/regressions/escaped-key-pointer.json`,
+                   `ToySutTest.PointersUseTheDecodedKeyNotItsEscapedText` and
+                   `PointerValueLawTest.TheToyResolvesAnEscapedKeyByItsValue` (`tests` stage),
+                   and O3 itself in every fuzz reading.
+Why it must stay:  The toy is the deliberately-correct reference the fuzz target checks; a
+                   reference that is wrong about pointers makes every pointer law report noise
+                   or, worse, agree with a SUT that has the same bug.
+
+---
+
 
 ## 2026-10-06 — the gate is no longer a 923-line bash script (wiring record, not a breakage)
 

@@ -126,3 +126,102 @@ TEST(ToySutTest, PointerEnumerationEscapesKeysSoThePointerRoundTrips) {
 }
 
 } // namespace
+
+// ---------------------------------------------------------------------------
+// v0.3 capabilities of the toy: the write verbs, the two serialization modes and the
+// number-text promise. The toy is the deliberately-correct reference every v0.3 law is
+// fuzzed against, so each capability is pinned here before the law that uses it.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+using jsonfuzz::WriteResult;
+
+TEST(ToySutWriteTest, SetAddsAFreshObjectMemberAndRemoveTakesItAway) {
+    ToySut sut;
+    const ParseConfig cfg;
+    ASSERT_TRUE(sut.parse(R"({"a":1})", cfg).accepted);
+    EXPECT_EQ(sut.set("/b", "[true]").status, WriteResult::Status::Applied);
+    EXPECT_EQ(sut.serialize(), R"({"a":1,"b":[true]})");
+    EXPECT_EQ(sut.get("/b/0"), std::optional<std::string>("true"));
+    EXPECT_EQ(sut.remove("/b").status, WriteResult::Status::Applied);
+    EXPECT_EQ(sut.serialize(), R"({"a":1})");
+}
+
+TEST(ToySutWriteTest, SetEscapesTheKeyItWrites) {
+    // The pointer token is the UNESCAPED key; the canonical text must hold it JSON-escaped.
+    ToySut sut;
+    const ParseConfig cfg;
+    ASSERT_TRUE(sut.parse("{}", cfg).accepted);
+    EXPECT_EQ(sut.set("/q\"~1x~0", "1").status, WriteResult::Status::Applied);
+    EXPECT_EQ(sut.serialize(), R"({"q\"/x~":1})");
+    EXPECT_EQ(sut.get("/q\"~1x~0"), std::optional<std::string>("1"));
+}
+
+TEST(ToySutWriteTest, SetReplacesAnExistingMember) {
+    ToySut sut;
+    const ParseConfig cfg;
+    ASSERT_TRUE(sut.parse(R"({"a":1})", cfg).accepted);
+    EXPECT_EQ(sut.set("/a", "2").status, WriteResult::Status::Applied);
+    EXPECT_EQ(sut.serialize(), R"({"a":2})");
+}
+
+TEST(ToySutWriteTest, ArraySetAppendsAtSizeOrDashAndReplacesBelowIt) {
+    ToySut sut;
+    const ParseConfig cfg;
+    ASSERT_TRUE(sut.parse("[1]", cfg).accepted);
+    EXPECT_EQ(sut.set("/1", "2").status, WriteResult::Status::Applied);
+    EXPECT_EQ(sut.set("/-", "3").status, WriteResult::Status::Applied);
+    EXPECT_EQ(sut.set("/0", "0").status, WriteResult::Status::Applied);
+    EXPECT_EQ(sut.serialize(), "[0,2,3]");
+    EXPECT_EQ(sut.set("/9", "9").status, WriteResult::Status::Rejected);
+    EXPECT_EQ(sut.remove("/1").status, WriteResult::Status::Applied);
+    EXPECT_EQ(sut.serialize(), "[0,3]");
+}
+
+TEST(ToySutWriteTest, RefusalsAreOutcomesNotThrows) {
+    ToySut sut;
+    const ParseConfig cfg;
+    ASSERT_TRUE(sut.parse(R"({"a":1})", cfg).accepted);
+    EXPECT_EQ(sut.set("/missing/x", "1").status, WriteResult::Status::Rejected);
+    EXPECT_EQ(sut.set("/a/x", "1").status, WriteResult::Status::Rejected); // scalar parent
+    EXPECT_EQ(sut.set("/b", "not json").status, WriteResult::Status::Rejected);
+    EXPECT_EQ(sut.remove("/missing").status, WriteResult::Status::Rejected);
+    EXPECT_EQ(sut.remove("").status, WriteResult::Status::Rejected); // the root stays
+    EXPECT_EQ(sut.serialize(), R"({"a":1})");
+}
+
+TEST(ToySutModeTest, OffersCompactAndPrettyModes) {
+    ToySut sut;
+    const ParseConfig cfg;
+    ASSERT_TRUE(sut.parse(R"({"a":[1,{}],"b":[]})", cfg).accepted);
+    ASSERT_EQ(sut.serialize_mode_count(), 2);
+    EXPECT_EQ(sut.serialize_mode(0), sut.serialize());
+    EXPECT_EQ(sut.serialize_mode(1), "{\n  \"a\": [\n    1,\n    {}\n  ],\n  \"b\": []\n}");
+}
+
+TEST(ToySutModeTest, DeclaresNumberTextPreservation) {
+    ToySut sut;
+    const ParseConfig cfg;
+    EXPECT_TRUE(sut.preserves_number_text());
+    ASSERT_TRUE(sut.parse("[-0,1E5,1.50]", cfg).accepted);
+    EXPECT_EQ(sut.serialize(), "[-0,1E5,1.50]");
+}
+
+TEST(ToySutTest, PointersUseTheDecodedKeyNotItsEscapedText) {
+    // RFC 6901 tokens name the key's VALUE: the key written "a\"b" in JSON is the
+    // three characters a"b, so its pointer is /a"b, not /a\"b. Found by the v0.3
+    // pointer-value law (O3) the first time it ran (fuzz/regressions/escaped-key-pointer.json):
+    // the toy enumerated the raw escaped
+    // body, and the independent walk found no member there.
+    ToySut sut;
+    const ParseConfig cfg;
+    ASSERT_TRUE(sut.parse(R"({"a\"b":1,"cA":2})", cfg).accepted);
+    const auto ptrs = sut.pointers(8);
+    EXPECT_NE(std::find(ptrs.begin(), ptrs.end(), "/a\"b"), ptrs.end());
+    EXPECT_NE(std::find(ptrs.begin(), ptrs.end(), "/cA"), ptrs.end());
+    EXPECT_EQ(sut.get("/a\"b"), std::optional<std::string>("1"));
+    EXPECT_EQ(sut.get("/cA"), std::optional<std::string>("2"));
+}
+
+} // namespace
