@@ -15,11 +15,11 @@ builds and runs, and no document in this repo quotes a test count.
 |---|---|
 | Run the gate (do this before you claim anything works) | `scripts/gate.sh` |
 | Fast tier (pre-commit) | `scripts/gate.sh --tier fast` |
-| Tests only | `scripts/gate.sh tests` |
-| Build only | `scripts/gate.sh build` |
+| List the stages and which tier holds each | `kit-ci --list` |
+| One stage only (tests, build, ...) | `bash scripts/<stage>.sh` (`ls scripts/` is the list; kit-ci takes no stage argument) |
 | Format the files you touched | `clang-format -i <files>` |
-| Fuzz smoke (10 s) | `scripts/gate.sh fuzz` |
-| CLI smoke | `scripts/gate.sh cli` |
+| Fuzz smoke (10 s) | `bash scripts/fuzz.sh` |
+| CLI smoke | `bash scripts/cli.sh` |
 | Build the CLI | `cmake --build build -j$(nproc)` and run `./build/jsonfuzz --version` |
 | One-time per clone: arm the hooks | `git config core.hooksPath .githooks` |
 
@@ -30,11 +30,17 @@ on this machine, say so explicitly — a skipped check is not a passed check.
 ## Architecture
 
 Four pieces, none of which (yet) includes a real parser:
-- `jsonfuzz_core` (`include/jsonfuzz/`, `src/jsonfuzz_core.cpp`) — the library. In v0.1 it
-  holds the artifact-identity `version()`; the generator, mutators and oracles land in
-  Phase B.
-- `jsonfuzz` CLI (`src/jsonfuzz_cli.cpp`) — currently only `--version` and `--help`
-  (Phase A); the `gen`/`mutate`/`check` verbs arrive in Phase B.
+- `jsonfuzz_core` (`include/jsonfuzz/`: core, generator, mutate, oracle, readings, sut) — the
+  library: the artifact-identity `version()`; a generator that emits a document together with
+  its intent record (the oracle's independent truth); JSON-aware mutators, one operator per bug
+  class, exposed as the libFuzzer custom-mutator entry; the `SystemUnderTest` interface; and
+  SEVEN oracle laws (O1 round-trip, O2 pointer contract, O3 pointer value vs an independent
+  walk, O4 set-then-remove, O5 formatter-preset agreement, O6 number-text preservation,
+  O7 strict ⊆ lazy). `docs/fuzz-oracle-reach.md` is the honest account of what the laws can
+  and cannot see.
+- `jsonfuzz` CLI (`src/jsonfuzz_cli.cpp`) — `gen`, `mutate` and `check` plus `--version`,
+  `--help`, `--list-ops`, `--list-suts`; `check` runs all seven laws and names each law that
+  caught a violation (exit 1).
 - `jsonfuzz_tests` (`tests/`) — GoogleTest; the TDD suite.
 - `fuzz_jsonfuzz` (`fuzz/fuzz_jsonfuzz.cpp`) — the libFuzzer target (clang only), built with
   `-DPROJECT_BUILD_FUZZING=ON` into `build-fuzz`.
@@ -72,8 +78,8 @@ The seams: `include/jsonfuzz/version.hpp` is CMake-generated from `project(JSONF
 
 <!-- APPEND-ONLY. One line each, newest first, and each one is a real incident. -->
 
-- The `tree` stage fails while work is uncommitted and untracked. During a session run the
-  stages by name (`scripts/gate.sh --tier fast`, `scripts/gate.sh fuzz`, ...) and commit only when
+- The `tree` stage fails while work is uncommitted and untracked. During a session run
+  single stages (`scripts/gate.sh --tier fast`, `bash scripts/fuzz.sh`, ...) and commit only when
   the orchestrator asks; the full default run is the committed-tree gate.
 - The fuzz target is clang-only: build it with `-DPROJECT_BUILD_FUZZING=ON` and a clang
   compiler (the `fuzz` stage does this in its own `build-fuzz` dir). It will not build with
