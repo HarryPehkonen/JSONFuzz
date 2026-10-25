@@ -27,7 +27,9 @@ stages = ["*"]
 # ---------------------------------------------------------------- the stages
 # Declaration order IS the run order for tier.full, and it is the order the old
 # CI_FULL_STAGES used:
-#   tree docs format build tests release cli version asan fuzz tsan tidy pristine
+#   tree docs format build tests consumer release cli version asan fuzz tsan tidy pristine
+# (`consumer` joined the list on 2026-10-25 — it is the subdirectory contract, and it runs
+# after `tests` because it configures its own throwaway consumer rather than this build.)
 # (`kitprobes` sat in that list too; it did NOT survive the conversion - a probe checks
 # a FILE, and the file it checked (tools/ci.sh) is gone. The closing note in this file
 # says how each guarantee it stood for got its new home.)
@@ -48,6 +50,12 @@ timeout = 0     # a cold compile on a slow machine is not a failure
 
 [stage.tests]
 cmd = "scripts/tests.sh"
+
+# The subdirectory contract: a consumer gets JSONFuzz::core and nothing else. Restored
+# 2026-10-25 after being unguarded for 19 days — the 2026-10-06 sweep deleted the probe that
+# held it and named this stage as its new home, which was never written (INCIDENTS.md).
+[stage.consumer]
+cmd = "scripts/consumer.sh"
 
 [stage.release]
 cmd = "scripts/release.sh"
@@ -86,3 +94,9 @@ timeout = 0     # a cold compile on a slow machine is not a failure
 # AI-DEV-STARTER fixes it claimed to carry. Its subject was tools/ci.sh, which this
 # conversion deletes, so the probes are deleted with it and every guarantee they stood
 # for is recorded in INCIDENTS.md with the file that now carries it.
+#
+# One of those guarantees needed a stage of its own and did not get one until 2026-10-25:
+# the subdirectory contract (a consumer gets JSONFuzz::core and nothing else) was recorded
+# as living in scripts/consumer.sh, in this note and in the record, while no such file
+# existed — so for 19 days a rule this repo had measured as GREEN went unchecked, and two
+# documents said otherwise. It is [stage.consumer] above now. INCIDENTS.md has the account.

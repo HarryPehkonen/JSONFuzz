@@ -14,6 +14,45 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-10-25 — the consumer rule was guarded by nothing for 19 days, and three documents said otherwise
+
+What broke:        The 2026-10-06 gate conversion (gate.toml/kit-ci) deleted `tools/kit-probes/`,
+                   and the subdirectory probe `consumer-subdirectory.sh` went with it. The same
+                   sweep measured that probe GREEN against the new entry point — it used the gate
+                   path only to find the repo root, so it had never depended on `tools/ci.sh` —
+                   and recorded its guarantee as now living in `scripts/consumer.sh`. That file
+                   was never written and no stage ran it: the record (`.ai-dev-starter.json`),
+                   this file's own "the guarantees themselves did not go" table, and gate.toml's
+                   closing note all named it, so a reader and the gate both saw the rule as held.
+                   Measured 2026-10-25: `scripts/` had no consumer.sh, gate.toml had no consumer
+                   stage, and a repo-wide grep for `add_subdirectory|consumer` across `*.sh` and
+                   `*.toml` found nothing at all. The CMake guards themselves survived
+                   (JSONFUZZ_IS_TOP_LEVEL, 7 use sites including the `format` target), so nothing
+                   had broken yet — what was gone was the check that notices the NEXT unguarded
+                   top-level artifact, in a repo whose one job is catching silent losses.
+Check added:       `scripts/consumer.sh`, registered as `[stage.consumer]` in gate.toml (full
+                   tier, after `tests`), holding the rule that a consumer gets `JSONFuzz::core`
+                   and NOTHING ELSE: a throwaway consumer with its OWN `format` target must
+                   configure; `JSONFuzz::core` must resolve in its scope; `--target jsonfuzz`,
+                   `jsonfuzz_tests` and `fuzz_jsonfuzz` must FAIL there; `--target format` must
+                   run the CONSUMER's own target; and the configure-time listing must not print.
+                   Nine checks, about two seconds, offline (it points nlohmann at a local include
+                   dir), and it reports SKIP rather than a pass when no local nlohmann exists.
+                   It is the deleted probe's checks in the kit-ci stage vocabulary — the probe
+                   ported unchanged, which is the point: its subject was this repo's BUILD SYSTEM,
+                   never the gate file, so the "a probe checks a FILE, and the file it checked is
+                   gone" reasoning did not apply to it.
+                   The 2026-10-06 table entry that named a non-existent file is corrected in
+                   place above, because a record that names a file has to name one that exists.
+Why it must stay:  Without it the next artifact added without a JSONFUZZ_IS_TOP_LEVEL guard (the
+                   CLI, the compile-only fuzz object library and the `format` target have all
+                   needed one) breaks every consumer silently, and the only workaround a consumer
+                   has is hand-listing jsonfuzz_core's translation units — which drops a source
+                   the day one is added here. That is the same silent loss this entry is about,
+                   one level up.
+
+---
+
 ## 2026-10-25 — a "-0 -> 0" serializer survived the number-text law because the fuzz target never generated the forms
 
 What broke:        B5 sabotage S7 (the toy serializer emitting the number text `-0` as `0`)
@@ -85,7 +124,10 @@ Probes:            the `kitprobes` stage and `tools/kit-probes/` are DELETED. A 
                    * optimized-stage.sh           RED against scripts/gate.sh
                    * tidy-baseline.sh             RED against scripts/gate.sh
                    The guarantees themselves did not go:
-                   * consumer-subdirectory -> scripts/consumer.sh — the stage that builds a consumer against the installed tree
+                   * consumer-subdirectory -> scripts/consumer.sh — the stage that configures a
+                     throwaway consumer WITH ITS OWN `format` target against this repo as a
+                     subdirectory (written 2026-10-25; see the newest entry for the 19 days in
+                     between, when this line named a file that did not exist)
                    * format-checks-staged      -> scripts/format.sh — the staged-copy check is the same code, in the stage that owns formatting
                    * gate-stage-guards         -> kit-ci's own runner: a stage whose command does not exit 0 fails the run, so a green run over stages that never ran is not expressible
                    * git-index-file            -> scripts/gate.sh and scripts/gate-env.sh — `unset GIT_INDEX_FILE`, in both places it has to reach
