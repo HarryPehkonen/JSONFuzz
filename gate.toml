@@ -50,6 +50,12 @@ timeout = 0     # a cold compile on a slow machine is not a failure
 
 [stage.tests]
 cmd = "scripts/tests.sh"
+# This stage does NOT build, and never did (same shape as the kit's stage_tests). So a single-stage
+# run graded whatever binary was already on disk: measured 2026-10-30, four compile errors in
+# tests/test_oracle_laws.cpp and still "100% tests passed, 0 tests failed out of 131", exit 0 —
+# while the build stage failed, correctly. The full tier never had this hole (build runs first);
+# the stage in isolation did, and single stages are what the docs tell a person to run.
+# scripts/tests.sh now refuses a test binary older than tests/, src/, include/ or CMakeLists.txt.
 
 # The subdirectory contract: a consumer gets JSONFuzz::core and nothing else. Restored
 # 2026-10-25 after being unguarded for 19 days — the 2026-10-06 sweep deleted the probe that

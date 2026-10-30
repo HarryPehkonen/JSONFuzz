@@ -542,4 +542,25 @@ TEST(CheckAllTest, RejectionLeavesEveryLawUnevaluated) {
     EXPECT_TRUE(report.violations.empty());
 }
 
+// A caller must never have to re-run a law to explain why it did not run: the report carries the
+// reason each law gave for skipping. Re-running would invoke the SUT a second time behind the
+// caller's back, and would put a second copy of the law-to-check mapping outside the oracle.
+TEST(CheckAllTest, EverySkippedLawCarriesItsReasonAndEveryEvaluatedLawIsSilent) {
+    ToySut sut;
+    const auto report = check_all(sut, "[1e309]", kCfg);
+    for (size_t i = 0; i < kLawCount; ++i) {
+        if (report.evaluated[i]) {
+            EXPECT_TRUE(report.skip_reasons[i].empty())
+                << "law " << i << " ran but still carries a reason: " << report.skip_reasons[i];
+        } else {
+            EXPECT_FALSE(report.skip_reasons[i].empty())
+                << "law " << i << " did not run and does not say why";
+        }
+    }
+    EXPECT_FALSE(report.evaluated[law_index(OracleViolation::Law::O3)]);
+    EXPECT_FALSE(report.evaluated[law_index(OracleViolation::Law::O4)]);
+    EXPECT_EQ(report.skip_reasons[law_index(OracleViolation::Law::O3)],
+              "the reference cannot model the canonical text");
+}
+
 } // namespace

@@ -151,6 +151,9 @@ LawResult check_strict_subset(SystemUnderTest& sut, std::string_view text,
 struct OracleReport {
     std::vector<OracleViolation> violations;
     std::array<bool, kLawCount> evaluated{};
+    /// Why law L did not run, when it did not; empty when the law ran. Filled by check_all, so a
+    /// caller can report a skip without re-running the law (which would invoke the SUT twice).
+    std::array<std::string, kLawCount> skip_reasons{};
 };
 OracleReport check_all(SystemUnderTest& sut, std::string_view text, const ParseConfig& config,
                        int pointer_max_depth = 256);

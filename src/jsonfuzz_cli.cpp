@@ -6,9 +6,12 @@
 
 #include <nlohmann/json.hpp>
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <exception>
 #include <fstream>
 #include <map>
 #include <string>
@@ -252,9 +255,25 @@ int cmd_check(int argc, char** argv) {
         return usage_error("cannot read --in file: " + o["in"]);
     }
     const jsonfuzz::ParseConfig cfg;
+    // A rejected input evaluates no law at all; say so instead of printing nothing.
+    // A rejection is an outcome, not a violation: exit 0.
+    jsonfuzz::ParseResult probe;
+    try {
+        probe = sut->parse(text, cfg);
+    } catch (const std::exception& e) {
+        probe.error = std::string("the SUT threw: ") + e.what();
+    } catch (...) {
+        probe.error = "the SUT threw";
+    }
+    if (!probe.accepted) {
+        std::printf("check: the SUT rejected this input (%s); no law evaluated\n",
+                    probe.error.c_str());
+        return 0;
+    }
     // Every law, O1..O7. Each violation names its law, then the structured fields that
     // are set: the pointer, what the law expected, what the SUT answered.
-    const auto violations = jsonfuzz::check_all(*sut, text, cfg).violations;
+    const jsonfuzz::OracleReport report = jsonfuzz::check_all(*sut, text, cfg);
+    const auto& violations = report.violations;
     for (const auto& v : violations) {
         std::printf("%s violation: %s\n", std::string(jsonfuzz::law_name(v.law)).c_str(),
                     v.message.c_str());
@@ -268,6 +287,30 @@ int cmd_check(int argc, char** argv) {
             std::printf("  actual: %s\n", v.actual.c_str());
         }
     }
+    // The summary: which laws ran and which did not, and why. The reasons come from the report
+    // (OracleReport::skip_reasons) — never from re-running a law here, which would invoke the SUT
+    // a second time behind the caller's back and put a second copy of the law-to-check mapping
+    // outside the oracle.
+    using Law = jsonfuzz::OracleViolation::Law;
+    constexpr std::array<Law, jsonfuzz::kLawCount> kLaws
+        = {Law::O1, Law::O2, Law::O3, Law::O4, Law::O5, Law::O6, Law::O7};
+    std::size_t ran = 0;
+    std::string skipped;
+    std::size_t skipped_count = 0;
+    for (const Law law : kLaws) {
+        const std::size_t index = jsonfuzz::law_index(law);
+        if (report.evaluated[index]) {
+            ++ran;
+            continue;
+        }
+        ++skipped_count;
+        const std::string& why = report.skip_reasons[index];
+        skipped += (skipped.empty() ? "" : "; ") + std::string(jsonfuzz::law_name(law)) + ": "
+                   + (why.empty() ? "no reason recorded" : why);
+    }
+    std::printf("check: %zu laws ran, %zu skipped%s%s%s, %zu violation%s\n", ran, skipped_count,
+                skipped.empty() ? "" : " (", skipped.c_str(), skipped.empty() ? "" : ")",
+                violations.size(), violations.size() == 1 ? "" : "s");
     return violations.empty() ? 0 : 1;
 }
 

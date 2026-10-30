@@ -119,7 +119,7 @@ guard that hid the blind spot in Permuto).
 ### 6. CLI `jsonfuzz` (`src/jsonfuzz_cli.cpp`)
 
 `gen` (text to stdout, `--intent <file>` for the sidecar), `mutate --in --op --seed` (deterministic),
-`check --sut <name> --in <file>` (run the oracles, print each violation), `--version`,
+`check --sut <name> --in <file>` (run the oracles, print each violation, then ONE summary line: how many laws ran, which were skipped and why, how many violations; a rejected input prints `check: the SUT rejected this input (...); no law evaluated`), `--version`,
 `--list-ops`, `--list-suts`, `--help`. Exit codes: 0 ok, 1 an oracle violation, 2 usage error,
 3 no such SUT. `tools/cli_smoke.sh` asserts every documented flag, both exit codes, and that an
 **unknown** flag FAILS (JSOM shipped a CLI that swallowed unknown options and exited 0).

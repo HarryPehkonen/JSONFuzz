@@ -3,6 +3,7 @@
 
 #include <sys/wait.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -151,21 +152,67 @@ TEST(CliTest, MutateUnknownOperatorFails) {
 
 // ---- check ----------------------------------------------------------------
 
-TEST(CliTest, CheckToyOnValidJsonExitsZeroWithNoOutput) {
-    const std::string in = temp_path("check_ok.json");
-    write_file(in, R"({"a":1,"b":[true,null],"c~d":2})");
-    const RunResult r = run({"check", "--sut", "toy", "--in", in});
-    ::remove(in.c_str());
-    ASSERT_EQ(r.status, 0);
-    EXPECT_TRUE(r.out.empty()) << "output: " << r.out;
+// The last line of `check` output is the summary: the one place a law that did not run
+// must never look like a law that passed (INCIDENTS.md, 2026-10-30).
+std::string last_line(const std::string& out) {
+    const std::size_t end = out.find_last_not_of('\n');
+    if (end == std::string::npos) {
+        return "";
+    }
+    const std::size_t nl = out.rfind('\n', end);
+    return out.substr(nl == std::string::npos ? 0 : nl + 1,
+                      end + 1 - (nl == std::string::npos ? 0 : nl + 1));
 }
 
-TEST(CliTest, CheckToyOnInvalidJsonExitsZero) {
+TEST(CliTest, CheckToyOnValidJsonSummarisesAllSevenLawsRan) {
+    const std::string in = temp_path("check_ok.json");
+    write_file(in, R"({"a":1,"b":2})");
+    const RunResult r = run({"check", "--sut", "toy", "--in", in});
+    ::remove(in.c_str());
+    ASSERT_EQ(r.status, 0) << r.out;
+    EXPECT_EQ(r.out, "check: 7 laws ran, 0 skipped, 0 violations\n");
+}
+
+TEST(CliTest, CheckNamesEverySkippedLawAndItsReason) {
+    // 1e309 is valid JSON the reference (nlohmann) cannot model: O3 and O4 examine nothing.
+    const std::string in = temp_path("check_skip.json");
+    write_file(in, R"({"a":1,"b":1e309})");
+    const RunResult r = run({"check", "--sut", "toy", "--in", in});
+    ::remove(in.c_str());
+    ASSERT_EQ(r.status, 0) << r.out;
+    const std::string line = last_line(r.out);
+    EXPECT_EQ(line.rfind("check: 5 laws ran, 2 skipped (O3 pointer-value: ", 0), 0U) << line;
+    EXPECT_NE(line.find("; O4 set-then-remove: "), std::string::npos) << line;
+    EXPECT_NE(line.find("the reference cannot model the canonical text"), std::string::npos)
+        << line;
+    const std::string tail = "), 0 violations";
+    EXPECT_TRUE(line.size() >= tail.size()
+                && line.compare(line.size() - tail.size(), tail.size(), tail) == 0)
+        << line;
+    EXPECT_EQ(std::count(r.out.begin(), r.out.end(), '\n'), 1) << "one line, no wrapping";
+}
+
+TEST(CliTest, CheckBrokenSiblingOnAnUnmodellableDocumentIsNotReportedClean) {
+    // The defect as measured: broken-sibling answers every pointer with its sibling's value,
+    // but on this document O3 skips, so the old silent exit 0 read as "clean".
+    const std::string in = temp_path("check_sibling_skip.json");
+    write_file(in, R"({"a":1,"b":1e309})");
+    const RunResult r = run({"check", "--sut", "broken-sibling", "--in", in});
+    ::remove(in.c_str());
+    EXPECT_EQ(r.status, 0) << r.out;
+    EXPECT_NE(r.out.find("O3 pointer-value: "), std::string::npos) << r.out;
+    EXPECT_NE(r.out.find("skipped"), std::string::npos) << r.out;
+}
+
+TEST(CliTest, CheckRejectedInputSaysNoLawEvaluated) {
     const std::string in = temp_path("check_invalid.json");
     write_file(in, "not json at all");
     const RunResult r = run({"check", "--sut", "toy", "--in", in});
     ::remove(in.c_str());
-    EXPECT_EQ(r.status, 0) << "output: " << r.out;
+    EXPECT_EQ(r.status, 0) << "a rejection is an outcome, not a violation: " << r.out;
+    EXPECT_EQ(r.out.rfind("check: the SUT rejected this input (", 0), 0U) << r.out;
+    EXPECT_NE(r.out.find("); no law evaluated\n"), std::string::npos) << r.out;
+    EXPECT_EQ(r.out.find("laws ran"), std::string::npos) << r.out;
 }
 
 TEST(CliTest, CheckUnknownSutExitsThree) {
@@ -201,6 +248,10 @@ TEST(CliTest, CheckRunsTheV03LawsAndPrintsTheStructuredViolation) {
     EXPECT_NE(r.out.find("pointer: /a"), std::string::npos) << r.out;
     EXPECT_NE(r.out.find("expected: 1"), std::string::npos) << r.out;
     EXPECT_NE(r.out.find("actual: 2"), std::string::npos) << r.out;
+    EXPECT_EQ(last_line(r.out).rfind("check: ", 0), 0U) << r.out;
+    // One violation reads as "1 violation": the summary is prose, not a log field.
+    EXPECT_NE(last_line(r.out).find(", 1 violation"), std::string::npos) << r.out;
+    EXPECT_EQ(last_line(r.out).find("1 violations"), std::string::npos) << r.out;
 }
 
 TEST(CliTest, CheckMissingArgumentsIsUsageError) {

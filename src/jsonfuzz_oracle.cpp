@@ -780,6 +780,7 @@ OracleReport check_all(SystemUnderTest& sut, std::string_view text, const ParseC
     rep.evaluated[law_index(OracleViolation::Law::O2)] = accepted;
     const auto add = [&rep](OracleViolation::Law law, LawResult res) {
         rep.evaluated[law_index(law)] = res.evaluated;
+        rep.skip_reasons[law_index(law)] = res.skip_reason;
         for (auto& v : res.violations) {
             rep.violations.push_back(std::move(v));
         }

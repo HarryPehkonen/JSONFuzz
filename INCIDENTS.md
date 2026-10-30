@@ -14,6 +14,60 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-10-30 — the tests stage reported 100% against a binary the sources no longer compiled
+
+What broke:        `scripts/tests.sh` ran ctest and nothing else, so it graded whatever binary was
+                   already in the build directory. With four compile errors in
+                   `tests/test_oracle_laws.cpp` (a test naming an `OracleReport` field that did not
+                   exist yet) the build stage failed — correctly — while the tests stage printed
+                   `100% tests passed, 0 tests failed out of 131` and exited 0. The full tier was
+                   never wrong (build runs before tests), but the stage in isolation is how it is
+                   actually used: the docs tell a session to run single stages, and a delegate was
+                   told to do exactly that, so "tests green" could be read as proof that the suite
+                   compiles and passes while the tree cannot be built at all.
+Check added:       the freshness guard in `scripts/tests.sh` (stage `tests`): if any file under
+                   `tests/`, `src/`, `include/` or `CMakeLists.txt` is newer than
+                   `$CI_BUILD_DIR/jsonfuzz_tests`, the stage fails with "the test binary is older
+                   than <file> — run scripts/build.sh first (this stage does not build)" instead of
+                   grading a binary that no longer matches the source. It deliberately does not
+                   build: that is the build stage's job, and a stage that silently builds doubles
+                   the tier's cost.
+Why it must stay:  Removing it restores a stage that reports a suite of passing tests for sources
+                   that do not compile — a green that cannot be reproduced from the tree, which is
+                   the exact failure class this repo exists to catch. Teeth measured 2026-10-30:
+                   consistent tree → pass (132 tests); one touched source → fail naming that file;
+                   a source with a syntax error → fail where it previously said "100% tests passed,
+                   0 tests failed out of 131, exit 0"; restore and build → pass again.
+                   The kit's own `stage_tests` (AI-DEV-STARTER `examples/cpp/ci.sh`) has the same
+                   shape, so every repo wired from it shares this hole when a stage is run alone.
+                   The kit is unchanged here; this check is repo-local until that is decided.
+
+---
+
+## 2026-10-30 — `check` printed nothing and exited 0 whether the laws passed, were skipped, or never ran
+
+What broke:        `jsonfuzz check --sut S --in F` wrote 0 bytes and exited 0 for three different
+                   situations: every law ran and passed; a law was skipped (`check --sut toy
+                   --in '{"a":1,"b":1e309}'` skips O3 and O4 — nlohmann throws out_of_range.406 —
+                   and `broken-sibling` on that document reported clean although that SUT answers
+                   every pointer with its sibling's value); and the SUT rejected the input so no
+                   law was evaluated. The library already recorded `evaluated` / `skip_reason`;
+                   only the CLI dropped them.
+Check added:       `src/jsonfuzz_cli.cpp` cmd_check prints one summary line always (laws ran /
+                   skipped with law name and reason / violations, or "the SUT rejected this input
+                   (...); no law evaluated"); `tests/test_cli.cpp` pins all four cases
+                   (CheckToyOnValidJsonSummarisesAllSevenLawsRan,
+                   CheckNamesEverySkippedLawAndItsReason,
+                   CheckBrokenSiblingOnAnUnmodellableDocumentIsNotReportedClean,
+                   CheckRejectedInputSaysNoLawEvaluated) — run by the gate's tests stage.
+Why it must stay:  Without the line, "nothing printed, exit 0" means "clean", "skipped" and
+                   "never ran" at once, and a skipped check is not a passed check. The reason is
+                   in the line because it says whether the input or the SUT is the problem.
+                   Deleting it (or printing it only on violations) re-opens exactly the false
+                   clean the broken-sibling test pins.
+
+---
+
 ## 2026-10-25 — the consumer rule was guarded by nothing for 19 days, and three documents said otherwise
 
 What broke:        The 2026-10-06 gate conversion (gate.toml/kit-ci) deleted `tools/kit-probes/`,

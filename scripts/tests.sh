@@ -12,6 +12,20 @@ run_stage() {
     if [ ! -f "$CI_BUILD_DIR/CMakeCache.txt" ]; then
         ci_fail tests "no build configured in $CI_BUILD_DIR — run the build stage first"
     fi
+    # This stage does NOT build. ctest reports 100% against whatever binary is on disk, including
+    # one the current sources no longer compile — measured 2026-10-30: four compile errors in
+    # tests/test_oracle_laws.cpp and still "100% tests passed, 0 tests failed out of 131", exit 0.
+    # The tier is safe (the build stage runs first, and it does fail); a single-stage run is not,
+    # and single-stage runs are exactly what the docs tell a person (or an agent) to do. So refuse
+    # to test a binary older than the sources it is supposed to test.
+    local test_bin="$CI_BUILD_DIR/jsonfuzz_tests"
+    if [ -f "$test_bin" ]; then
+        local newer
+        newer=$(find tests src include CMakeLists.txt -newer "$test_bin" -print -quit 2>/dev/null)
+        if [ -n "$newer" ]; then
+            ci_fail tests "the test binary is older than $newer — run scripts/build.sh first (this stage does not build)"
+        fi
+    fi
     if ! run_tests "$CI_BUILD_DIR" "$CI_LOG_DIR/tests.log"; then
         grep -E "FAILED|Failed|\*\*\*Failed|assert" "$CI_LOG_DIR/tests.log" | head -30 | sed 's/^/      /'
         ci_fail tests "test failures (all of them are above; full output in the log)" "$CI_LOG_DIR/tests.log"

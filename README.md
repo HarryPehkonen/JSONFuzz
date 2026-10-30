@@ -43,7 +43,7 @@ tests and fuzz target use a deliberately-correct toy SUT.
   The v0.3 capabilities a law needs (`set`/`remove`, serialization modes, the number-text
   promise) are optional on the interface: a SUT that does not offer one is *skipped* by
   that law, never failed by it. Every law returns structured violations (law, input,
-  pointer, expected, actual) and never throws; `check` prints them.
+  pointer, expected, actual) and never throws; `check` prints them, then one summary line (`check: 7 laws ran, 0 skipped, 0 violations`) that names every skipped law and its reason, so a law that did not run never reads as one that passed.
 
 The error path is `try { parse } catch { return; }` and the property runs **outside every
 catch** — a broad `catch` around the property turns a wrong answer into "expected for

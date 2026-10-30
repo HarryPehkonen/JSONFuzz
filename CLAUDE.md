@@ -40,7 +40,8 @@ Four pieces, none of which (yet) includes a real parser:
   and cannot see.
 - `jsonfuzz` CLI (`src/jsonfuzz_cli.cpp`) — `gen`, `mutate` and `check` plus `--version`,
   `--help`, `--list-ops`, `--list-suts`; `check` runs all seven laws and names each law that
-  caught a violation (exit 1).
+  caught a violation (exit 1). It always ends with ONE summary line — laws ran / skipped (each
+  named with its reason) / violations, or "the SUT rejected this input"; silence never means clean.
 - `jsonfuzz_tests` (`tests/`) — GoogleTest; the TDD suite.
 - `fuzz_jsonfuzz` (`fuzz/fuzz_jsonfuzz.cpp`) — the libFuzzer target (clang only), built with
   `-DPROJECT_BUILD_FUZZING=ON` into `build-fuzz`.
