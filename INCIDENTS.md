@@ -14,33 +14,49 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
-## 2026-10-30 — the tests stage reported 100% against a binary the sources no longer compiled
+## 2026-10-30 — two stages graded a binary the sources no longer built, and reported it green
 
-What broke:        `scripts/tests.sh` ran ctest and nothing else, so it graded whatever binary was
-                   already in the build directory. With four compile errors in
-                   `tests/test_oracle_laws.cpp` (a test naming an `OracleReport` field that did not
-                   exist yet) the build stage failed — correctly — while the tests stage printed
+What broke:        `scripts/tests.sh` ran ctest and nothing else, and `scripts/cli.sh` ran the CLI
+                   smoke test and nothing else, so both graded whatever binaries were already in
+                   the build directory. With four compile errors in `tests/test_oracle_laws.cpp`
+                   (a test naming an `OracleReport` field that did not exist yet) the build stage
+                   failed — correctly — while the tests stage printed
                    `100% tests passed, 0 tests failed out of 131` and exited 0. The full tier was
-                   never wrong (build runs before tests), but the stage in isolation is how it is
+                   never wrong (build runs before tests), but a stage in isolation is how it is
                    actually used: the docs tell a session to run single stages, and a delegate was
                    told to do exactly that, so "tests green" could be read as proof that the suite
-                   compiles and passes while the tree cannot be built at all.
-Check added:       the freshness guard in `scripts/tests.sh` (stage `tests`): if any file under
-                   `tests/`, `src/`, `include/` or `CMakeLists.txt` is newer than
-                   `$CI_BUILD_DIR/jsonfuzz_tests`, the stage fails with "the test binary is older
-                   than <file> — run scripts/build.sh first (this stage does not build)" instead of
-                   grading a binary that no longer matches the source. It deliberately does not
-                   build: that is the build stage's job, and a stage that silently builds doubles
-                   the tier's cost.
-Why it must stay:  Removing it restores a stage that reports a suite of passing tests for sources
-                   that do not compile — a green that cannot be reproduced from the tree, which is
-                   the exact failure class this repo exists to catch. Teeth measured 2026-10-30:
-                   consistent tree → pass (132 tests); one touched source → fail naming that file;
-                   a source with a syntax error → fail where it previously said "100% tests passed,
-                   0 tests failed out of 131, exit 0"; restore and build → pass again.
-                   The kit's own `stage_tests` (AI-DEV-STARTER `examples/cpp/ci.sh`) has the same
-                   shape, so every repo wired from it shares this hole when a stage is run alone.
-                   The kit is unchanged here; this check is repo-local until that is decided.
+                   compiles and passes while the tree cannot be built at all. Measured later the
+                   same day, `cli` had the same hole: it grades `build/jsonfuzz` and builds nothing.
+Check added:       `ci_require_fresh <stage> <target>` in `scripts/gate-env.sh`, called from the
+                   `tests` and `cli` stages: a dry run of the target asks the build system whether a
+                   build would still change it, and any pending compile/link step fails the stage
+                   with "N build step(s) are pending for <target> — run scripts/build.sh first (this
+                   stage does not build)". Neither stage builds: that is the build stage's job, and a
+                   stage that silently builds doubles the tier's cost and bypasses the build stage's
+                   own checks.
+                   Two simpler designs were measured and rejected on 2026-10-30, both for reasons the
+                   guard would have been blamed for: a source-path list compared by mtime fired on a
+                   clean tree (the `-newer` scan matched the `tests` DIRECTORY, whose mtime moves for
+                   reasons of its own) and blocked the tests stage when only `src/jsonfuzz_cli.cpp`
+                   changed — a file `jsonfuzz_tests` does not depend on; and `make -q` cannot answer
+                   it at all, because CMake's check-build-system target is never up to date, so it
+                   returns 1 on a clean tree. The dry run is per target and derived: no hand list of
+                   sources exists to drift.
+Why it must stay:  Removing it restores stages that report a passing suite and a passing CLI for
+                   sources that do not compile — a green that cannot be reproduced from the tree,
+                   which is the exact failure class this repo exists to catch. Teeth measured
+                   2026-10-30, stage by stage: clean tree → both pass (132 tests, 27 CLI checks);
+                   a source only the CLI depends on → `cli` fails, `tests` passes; a library source →
+                   both fail with the pending-step count; a source with a syntax error → `build` and
+                   `tests` both fail where the tests stage previously said "100% tests passed, 0 tests
+                   failed out of 131, exit 0"; rebuild → both pass. Cost: 28 ms per stage.
+                   The kit's own `stage_tests` and `stage_cli` (AI-DEV-STARTER `examples/cpp/ci.sh`)
+                   and `stage_version`/`stage_tidy` have the same shape, so every repo wired from it
+                   shares the hole when a stage is run alone. `version` is NOT affected here — it
+                   reads `CMakeLists.txt` itself as a third, ungenerated source, so a stale header or
+                   binary disagrees and the stage fails loudly instead of passing silently. The kit
+                   is unchanged; this check is repo-local until that is decided (see
+                   `briefs/kit-stage-freshness.md` in the workspace for the fleet plan).
 
 ---
 

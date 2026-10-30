@@ -9,6 +9,7 @@ set -uo pipefail
 
 run_stage() {
     ci_begin "cli (smoke: documented flags, unknown flag fails)"
+    ci_require_fresh cli jsonfuzz
     if ! bash "$REPO_ROOT/tools/cli_smoke.sh" "$CI_BUILD_DIR/jsonfuzz" > "$CI_LOG_DIR/cli.log" 2>&1; then
         ci_fail cli "a CLI check failed" "$CI_LOG_DIR/cli.log"
     fi

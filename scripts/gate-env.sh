@@ -168,6 +168,40 @@ run_tests() {  # run_tests <build-dir> <logfile>
     eval "$CI_TEST_CMD" > "$2" 2>&1
 }
 
+# ci_require_fresh <stage> <target> — refuse to grade a target the build system says is out of date.
+#
+# A stage that does not build (tests, cli) grades whatever binary is already in the build dir: on
+# 2026-10-30 the tests stage printed "100% tests passed, 0 tests failed out of 131" and exited 0 for
+# a tree with four compile errors in tests/test_oracle_laws.cpp, while the build stage failed —
+# correctly. The FULL tier is safe (the build stage runs first); a single-stage run is not, and
+# single-stage runs are what the docs tell a person (or an agent) to do.
+#
+# The question is "would a build change THIS target?", and only the build system can answer it:
+#   - a list of source paths cannot: touching src/jsonfuzz_cli.cpp must not block the tests stage
+#     (jsonfuzz_tests does not depend on it), and a directory's mtime moves for reasons of its own
+#     (a `-newer` scan over `tests` matched the directory itself and failed a clean tree);
+#   - `make -q` cannot either: it returns 1 on a clean tree, because CMake's check-build-system
+#     target is never up to date (measured 2026-10-30);
+#   - a dry run can: it prints the compile/link steps still pending, per target. Measured 28 ms.
+ci_require_fresh() {  # ci_require_fresh <stage> <target>
+    local stage="$1" target="$2" generator pending
+    [ -f "$CI_BUILD_DIR/CMakeCache.txt" ] || return 0
+    generator=$(sed -n 's/^CMAKE_GENERATOR:INTERNAL=//p' "$CI_BUILD_DIR/CMakeCache.txt" | head -1)
+    case "$generator" in
+    "Unix Makefiles" | "MSYS Makefiles" | "MinGW Makefiles" | "Watcom WMake" | "Borland Makefiles") ;;
+    *)
+        printf '    SKIP: cannot tell whether %s is up to date under the "%s" generator — %s grades the binary on disk\n' \
+            "$target" "${generator:-unknown}" "$stage"
+        return 0
+        ;;
+    esac
+    pending=$(cd "$CI_BUILD_DIR" && make -n "$target" 2>/dev/null | grep -cE 'Building (C|CXX) object|Linking' || true)
+    if [ "${pending:-0}" -gt 0 ]; then
+        ci_fail "$stage" "$pending build step(s) are pending for $target — the sources changed after the last build; run scripts/build.sh first (this stage does not build)"
+    fi
+    return 0
+}
+
 mkdir -p "$CI_LOG_DIR"
 
 
