@@ -3,6 +3,8 @@
 #include <jsonfuzz/mutate.hpp>
 #include <jsonfuzz/sut.hpp>
 
+#include "jsonfuzz_reference.hpp"
+
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
@@ -145,7 +147,7 @@ bool toy_accepts(const std::string& text) {
 // compared against a real parse when the text is parseable.
 bool text_parses(const std::string& text) {
     try {
-        const nlohmann::json j = nlohmann::json::parse(text);
+        const nlohmann::json j = nlohmann::json::parse(detail::tag_unmodelable_numbers(text).text);
         (void)j;
         return true;
     } catch (...) {
@@ -156,11 +158,17 @@ bool text_parses(const std::string& text) {
 } // namespace
 
 bool intent_matches_text(const Intent& intent, const std::string& text) {
+    // nlohmann stops at a number a double cannot hold (out_of_range.406), and the generator
+    // emits such numbers at any weight: count the TAGGED text, where each one is a string that
+    // is counted back as the number it is.
+    const detail::TaggedText tagged = detail::tag_unmodelable_numbers(text);
     SaxCounter counter;
-    if (!nlohmann::json::sax_parse(text, &counter)) {
+    if (!nlohmann::json::sax_parse(tagged.text, &counter)) {
         return false;
     }
-    const Counts& c = counter.counts;
+    Counts c = counter.counts;
+    c.strings -= tagged.tagged;
+    c.numbers += tagged.tagged;
     return intent.object_count == c.objects && intent.array_count == c.arrays
            && intent.string_count == c.strings && intent.number_count == c.numbers
            && intent.bool_count == c.bools && intent.null_count == c.nulls

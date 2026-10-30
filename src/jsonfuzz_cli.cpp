@@ -145,6 +145,7 @@ void write_intent(const std::string& path, const jsonfuzz::Intent& it) {
     j["has_lone_surrogate"] = it.has_lone_surrogate;
     j["has_control_char"] = it.has_control_char;
     j["has_boundary_number"] = it.has_boundary_number;
+    j["has_out_of_range_number"] = it.has_out_of_range_number;
     std::ofstream f(path);
     f << j.dump(2) << '\n';
 }

@@ -44,6 +44,9 @@ struct Intent {
     bool has_lone_surrogate = false;
     bool has_control_char = false;
     bool has_boundary_number = false;
+    // A number a double cannot hold (1e309, -1e309, 1e9999, a huge exponent, 310+ digits):
+    // emitted at ANY weight so O3/O4 meet the class their reference compares by text.
+    bool has_out_of_range_number = false;
 };
 
 /// A generated document: the text plus the intent that produced it.

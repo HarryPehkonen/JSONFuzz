@@ -11,7 +11,9 @@
 ///
 /// The toy SUT is the deliberately-correct reference for readings 1 & 2; reading 3 uses
 /// the nlohmann SAX counter as the independent truth for the generator's intent record
-/// (the generator is run with non-adversarial options so the text is always parseable).
+/// (the generator is run with non-adversarial options so the text is always valid JSON; the
+/// numbers a double cannot hold, which it emits at any weight, are counted on the reference's
+/// tagged text).
 
 #include <jsonfuzz/generator.hpp>
 #include <jsonfuzz/oracle.hpp>

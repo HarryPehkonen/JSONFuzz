@@ -1,6 +1,7 @@
 #include <jsonfuzz/generator.hpp>
 
 #include <cstring>
+#include <string>
 #include <vector>
 
 namespace jsonfuzz {
@@ -207,12 +208,24 @@ private:
         // -> a double). The number-text law (O6) only sees such a rewrite if the form
         // reaches it, and the fuzz target generates at weight 0 (measured in B5: a "-0 -> 0"
         // sabotage survived 10 s). "-0" is index 0 on purpose: libFuzzer inputs are short,
-        // ByteSource pads with zero bytes, and the zero tail picks index 0. Every form is one
-        // the reference parses (1e309 is not, so it stays adversarial-only).
+        // ByteSource pads with zero bytes, and the zero tail picks index 0.
+        // Slot 7 is a number a double cannot hold. nlohmann throws on it, and before the
+        // reference tagged such numbers by their text (src/jsonfuzz_reference.hpp) O3 and O4
+        // examined nothing on a document holding one; the class was adversarial-only, so no
+        // campaign ever put one in front of the two laws.
         if (pick(6) == 0) {
             static const char* forms[]
                 = {"-0", "-0.0", "0E0", "1e+2", "1.50", "1e-400", "123456789012345678901234"};
-            out += forms[pick(7)];
+            const int f = pick(8);
+            if (f < 7) {
+                out += forms[f];
+                return;
+            }
+            static const std::string long_digits = "1" + std::string(399, '0');
+            static const std::string out_of_range[]
+                = {"1e309", "-1e309", "1e9999", "1e99999999999999999999", long_digits};
+            out += out_of_range[pick(5)];
+            intent_.has_out_of_range_number = true;
             return;
         }
         if (pick_bool()) {

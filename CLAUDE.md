@@ -37,7 +37,10 @@ Four pieces, none of which (yet) includes a real parser:
   SEVEN oracle laws (O1 round-trip, O2 pointer contract, O3 pointer value vs an independent
   walk, O4 set-then-remove, O5 formatter-preset agreement, O6 number-text preservation,
   O7 strict ⊆ lazy). `docs/fuzz-oracle-reach.md` is the honest account of what the laws can
-  and cannot see.
+  and cannot see. The reference of O3/O4 and of reading 3 is nlohmann, which throws on a number
+  a double cannot hold; `src/jsonfuzz_reference.hpp` (private) first rewrites each such number
+  into a tagged string holding its text, so those numbers compare by text. The reference is
+  never the SUT, and never the toy.
 - `jsonfuzz` CLI (`src/jsonfuzz_cli.cpp`) — `gen`, `mutate` and `check` plus `--version`,
   `--help`, `--list-ops`, `--list-suts`; `check` runs all seven laws and names each law that
   caught a violation (exit 1). It always ends with ONE summary line — laws ran / skipped (each

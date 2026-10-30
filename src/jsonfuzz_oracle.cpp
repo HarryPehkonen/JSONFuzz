@@ -1,5 +1,7 @@
 #include <jsonfuzz/oracle.hpp>
 
+#include "jsonfuzz_reference.hpp"
+
 #include <nlohmann/json.hpp>
 
 #include <cstddef>
@@ -226,13 +228,61 @@ bool serialized(const SystemUnderTest& sut, OracleViolation::Law law, std::strin
     }
 }
 
-std::optional<json> reference_parse(std::string_view text) {
+// Counts the string VALUES that begin with the reference's number tag. SAX, not the tree: the
+// tree keeps only the last of a duplicated key, so a tagged number (or a genuine tag-spelling
+// string) under an earlier duplicate would vanish from a tree count (measured: false skips on
+// generated documents).
+class TagCounter : public nlohmann::json_sax<json> {
+public:
+    int tags = 0;
+
+    bool null() override { return true; }
+    bool boolean(bool) override { return true; }
+    bool number_integer(json::number_integer_t) override { return true; }
+    bool number_unsigned(json::number_unsigned_t) override { return true; }
+    bool number_float(json::number_float_t, const json::string_t&) override { return true; }
+    bool string(json::string_t& s) override {
+        tags += s.rfind(detail::kNumberTag, 0) == 0 ? 1 : 0;
+        return true;
+    }
+    bool binary(json::binary_t&) override { return true; }
+    bool start_object(std::size_t) override { return true; }
+    bool start_array(std::size_t) override { return true; }
+    bool end_object() override { return true; }
+    bool end_array() override { return true; }
+    bool key(json::string_t&) override { return true; }
+    bool parse_error(std::size_t, const std::string&, const nlohmann::detail::exception&) override {
+        return false;
+    }
+};
+
+// The reference's model of `text`: nlohmann, after every number a double cannot hold has been
+// tagged by its text (src/jsonfuzz_reference.hpp). nullopt, with `why`, when nlohmann cannot
+// parse even that (a lone surrogate, a lenient SUT's lazy number), or when a string in `text`
+// already spells the tag: then a tagged number and that string would be indistinguishable.
+std::optional<json> reference_parse(std::string_view text, std::string* why = nullptr) {
+    const detail::TaggedText tagged = detail::tag_unmodelable_numbers(text);
+    std::optional<json> j;
     try {
-        return json::parse(text);
+        j = json::parse(tagged.text);
     } catch (...) {
+        if (why != nullptr) {
+            *why = "the reference cannot model the canonical text";
+        }
         return std::nullopt;
     }
+    TagCounter counter;
+    if (!json::sax_parse(tagged.text, &counter) || counter.tags != tagged.tagged) {
+        if (why != nullptr) {
+            *why = "the canonical text holds a string spelling the reference's number tag";
+        }
+        return std::nullopt;
+    }
+    return j;
 }
+
+// What a report prints for a reference value: its dump, with tagged numbers as their text.
+std::string shown(const json& j) { return detail::untag_numbers(j.dump()); }
 
 std::string escape_token(const std::string& key) {
     std::string out;
@@ -415,12 +465,13 @@ LawResult check_pointer_values(SystemUnderTest& sut, std::string_view text,
     if (!serialized(sut, kLaw, text, r, canonical)) {
         return r;
     }
-    const std::optional<json> ref = reference_parse(canonical);
+    const std::optional<json> ref = reference_parse(canonical, &r.skip_reason);
     if (!ref) {
-        r.skip_reason = "the reference cannot model the canonical text";
         return r;
     }
-    const std::vector<std::string> dups = duplicated_keys(canonical);
+    // The duplicate scan reads the TAGGED text: on the raw text it would stop at 1e309.
+    const std::vector<std::string> dups
+        = duplicated_keys(detail::tag_unmodelable_numbers(canonical).text);
     std::vector<std::string> ptrs;
     if (!enumerated(sut, pointer_max_depth, kLaw, text, r, ptrs)) {
         return r;
@@ -442,12 +493,12 @@ LawResult check_pointer_values(SystemUnderTest& sut, std::string_view text,
             got = sut.get(p);
         } catch (...) {
             r.violations.push_back(violation(kLaw, "get() threw for a pointer the SUT enumerated",
-                                             text, p, expected->dump()));
+                                             text, p, shown(*expected)));
             continue;
         }
         if (!got) {
             r.violations.push_back(violation(kLaw, "get() returned no value", text, p,
-                                             expected->dump(), "<no value>"));
+                                             shown(*expected), "<no value>"));
             continue;
         }
         const std::optional<json> actual = reference_parse(*got);
@@ -455,7 +506,7 @@ LawResult check_pointer_values(SystemUnderTest& sut, std::string_view text,
             r.violations.push_back(violation(kLaw,
                                              "get() disagrees with the independent walk of the "
                                              "canonical text",
-                                             text, p, expected->dump(), *got));
+                                             text, p, shown(*expected), *got));
         }
     }
     return r;
@@ -472,12 +523,13 @@ LawResult check_set_remove(SystemUnderTest& sut, std::string_view text, const Pa
     if (!serialized(sut, kLaw, text, r, canonical)) {
         return r;
     }
-    const std::optional<json> ref = reference_parse(canonical);
+    const std::optional<json> ref = reference_parse(canonical, &r.skip_reason);
     if (!ref) {
-        r.skip_reason = "the reference cannot model the canonical text";
         return r;
     }
-    const std::vector<std::string> dups = duplicated_keys(canonical);
+    // The duplicate scan reads the TAGGED text: on the raw text it would stop at 1e309.
+    const std::vector<std::string> dups
+        = duplicated_keys(detail::tag_unmodelable_numbers(canonical).text);
     std::vector<std::string> ptrs;
     if (!enumerated(sut, pointer_max_depth, kLaw, text, r, ptrs)) {
         return r;

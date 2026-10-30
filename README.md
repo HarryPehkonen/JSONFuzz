@@ -30,7 +30,9 @@ tests and fuzz target use a deliberately-correct toy SUT.
   The v0.3 laws catch **wrong-but-valid** answers (each is its own function in
   `include/jsonfuzz/oracle.hpp`, with its limits written next to it):
   - **O3 pointer value**: `get(p)` equals what an independent walk (nlohmann, the toolkit's
-    own model) of the canonical text finds at `p`.
+    own model) of the canonical text finds at `p`. Numbers compare by value, except a number
+    a double cannot hold (`1e309`), which nlohmann cannot represent: that one compares by its
+    exact text.
   - **O4 set-then-remove**: setting a fresh pointer and removing it returns the canonical
     text to what it was (and `get` sees the value in between).
   - **O5 preset agreement**: every serialization mode reparses to the same document and is

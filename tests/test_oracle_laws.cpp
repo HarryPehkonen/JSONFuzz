@@ -120,8 +120,81 @@ TEST(PointerValueLawTest, ReportsAGetThatReturnsASiblingMember) {
 }
 
 TEST(PointerValueLawTest, SkipsADocumentTheReferenceCannotModel) {
-    ToySut sut; // the toy accepts 1e309; the reference reports an overflow
-    const LawResult r = check_pointer_values(sut, "[1e309]", kCfg);
+    ToySut sut; // the toy accepts a lone surrogate; the reference rejects it
+    const LawResult r = check_pointer_values(sut, R"(["\ud800"])", kCfg);
+    EXPECT_FALSE(r.evaluated);
+    EXPECT_FALSE(r.skip_reason.empty());
+    EXPECT_TRUE(r.violations.empty());
+}
+
+// Numbers a double cannot hold. nlohmann throws out_of_range.406 on every one of them, so
+// before the reference tagged them by their text, O3 and O4 examined nothing on any document
+// holding one — and a SUT answering every pointer with its sibling was reported clean.
+const std::vector<std::string> kOutOfRangeDocs = {
+    R"({"a":1,"b":1e309})",
+    "[1e309]",
+    "-1e309",
+    R"({"x":[1e9999,{"y":-1e309}]})",
+    "[1e99999999999999999999]",
+    "[" + std::string(400, '9') + "]",
+};
+
+TEST(PointerValueLawTest, EvaluatesADocumentHoldingANumberOutsideDoubleRange) {
+    for (const auto& doc : kOutOfRangeDocs) {
+        ToySut sut;
+        const LawResult r = check_pointer_values(sut, doc, kCfg);
+        EXPECT_TRUE(r.evaluated) << doc << ": " << r.skip_reason;
+        EXPECT_TRUE(r.violations.empty()) << doc << ": " << r.violations.front().message;
+    }
+}
+
+TEST(PointerValueLawTest, ReportsASiblingGetterOnADocumentHoldingAnOutOfRangeNumber) {
+    SiblingGetterSut sut;
+    const LawResult r = check_pointer_values(sut, R"({"a":1,"b":1e309})", kCfg);
+    const OracleViolation* v = first_of(r.violations, Law::O3);
+    ASSERT_NE(v, nullptr) << "the sibling answer was invisible: " << r.skip_reason;
+    EXPECT_EQ(v->pointer, "/a");
+    EXPECT_EQ(v->expected, "1");
+    EXPECT_EQ(v->actual, "1e309");
+}
+
+TEST(PointerValueLawTest, ComparesOutOfRangeNumbersByTheirText) {
+    // Two numbers the reference cannot hold are not "equal because both are unmodellable".
+    SiblingGetterSut sut;
+    const LawResult r = check_pointer_values(sut, R"({"a":1e309,"b":2e309})", kCfg);
+    const OracleViolation* v = first_of(r.violations, Law::O3);
+    ASSERT_NE(v, nullptr) << r.skip_reason;
+    EXPECT_EQ(v->pointer, "/a");
+    EXPECT_EQ(v->expected, "1e309");
+    EXPECT_EQ(v->actual, "2e309");
+}
+
+// get() answers an out-of-range number with a STRING that spells the reference's own tag for
+// that number. If the tag leaked into equality, this wrong answer would pass.
+class TagSpellingGetSut : public ToyBacked {
+public:
+    std::optional<std::string> get(std::string_view p) const override {
+        if (p == "/a") {
+            return std::string(R"("\u0000jsonfuzz-number:1e309")");
+        }
+        return toy_.get(p);
+    }
+};
+
+TEST(PointerValueLawTest, AStringNeverEqualsAnOutOfRangeNumber) {
+    TagSpellingGetSut sut;
+    const LawResult r = check_pointer_values(sut, R"({"a":1e309})", kCfg);
+    EXPECT_TRUE(r.evaluated) << r.skip_reason;
+    const OracleViolation* v = first_of(r.violations, Law::O3);
+    ASSERT_NE(v, nullptr) << "a string was taken for the number 1e309";
+    EXPECT_EQ(v->pointer, "/a");
+}
+
+TEST(PointerValueLawTest, ADocumentSpellingTheReferencesTagIsASkipNotAPass) {
+    // A genuine string equal to the tag would make the reference ambiguous: skip, never guess.
+    ToySut sut;
+    const LawResult r
+        = check_pointer_values(sut, R"({"k":"\u0000jsonfuzz-number:1e309","n":1e309})", kCfg);
     EXPECT_FALSE(r.evaluated);
     EXPECT_FALSE(r.skip_reason.empty());
     EXPECT_TRUE(r.violations.empty());
@@ -132,6 +205,40 @@ TEST(PointerValueLawTest, PointersThroughADuplicatedKeyAreNotFindings) {
     ToySut sut;
     const LawResult r = check_pointer_values(sut, R"({"a":{"x":1},"a":{"x":2},"b":3})", kCfg);
     EXPECT_TRUE(r.evaluated);
+    EXPECT_TRUE(r.violations.empty()) << r.violations.front().message;
+}
+
+TEST(PointerValueLawTest, ADuplicatedKeyAfterAnOutOfRangeNumberIsStillSeen) {
+    // The duplicate scan is the reference's too: if it stopped at 1e309 it would miss the
+    // second "a", and the toy's first-wins answer at /a/x would be a false violation.
+    ToySut sut;
+    const LawResult r
+        = check_pointer_values(sut, R"({"n":1e309,"a":{"x":1},"a":{"x":2},"b":3})", kCfg);
+    EXPECT_TRUE(r.evaluated) << r.skip_reason;
+    EXPECT_TRUE(r.violations.empty()) << r.violations.front().message;
+}
+
+TEST(PointerValueLawTest, AnOutOfRangeNumberUnderADroppedDuplicateIsNotATagCollision) {
+    // Measured on generated documents: the reference's tree keeps only the LAST duplicate, so
+    // a tagged number under an earlier one leaves the tree, and counting tags in the tree read
+    // that as "a string spells the tag" — a false skip. The count must see every value.
+    ToySut sut;
+    const LawResult r = check_pointer_values(sut, R"({"a":1e309,"a":2,"b":[3]})", kCfg);
+    EXPECT_TRUE(r.evaluated) << r.skip_reason;
+    EXPECT_TRUE(r.violations.empty()) << r.violations.front().message;
+    ToySut sut4;
+    const LawResult r4 = check_set_remove(sut4, R"({"a":1e309,"a":2,"b":[3]})", kCfg);
+    EXPECT_TRUE(r4.evaluated) << r4.skip_reason;
+    EXPECT_TRUE(r4.violations.empty()) << r4.violations.front().message;
+}
+
+TEST(PointerValueLawTest, ATagSpellingStringUnderADroppedDuplicateIsStillASkip) {
+    // The other side of the same count: a genuine tag-spelling string must be seen even where
+    // the tree drops it, or a dropped tagged number could hide it and the count would balance.
+    ToySut sut;
+    const LawResult r = check_pointer_values(
+        sut, R"({"k":"\u0000jsonfuzz-number:1e309","k":1,"n":[1e309]})", kCfg);
+    EXPECT_FALSE(r.evaluated);
     EXPECT_TRUE(r.violations.empty()) << r.violations.front().message;
 }
 
@@ -195,6 +302,34 @@ class ThrowingRemoveSut : public ToyBacked {
 public:
     WriteResult remove(std::string_view) override { throw std::runtime_error("remove threw"); }
 };
+
+TEST(SetRemoveLawTest, EvaluatesADocumentHoldingANumberOutsideDoubleRange) {
+    for (const auto& doc : kOutOfRangeDocs) {
+        if (doc == "-1e309") {
+            continue; // a scalar root: no parent to write into, already a documented skip
+        }
+        ToySut sut;
+        const LawResult r = check_set_remove(sut, doc, kCfg);
+        EXPECT_TRUE(r.evaluated) << doc << ": " << r.skip_reason;
+        EXPECT_TRUE(r.violations.empty()) << doc << ": " << r.violations.front().message;
+    }
+}
+
+TEST(SetRemoveLawTest, ReportsAStickyRemoveOnADocumentHoldingAnOutOfRangeNumber) {
+    StickyRemoveSut sut;
+    const LawResult r = check_set_remove(sut, R"({"a":1e309})", kCfg);
+    EXPECT_TRUE(r.evaluated) << r.skip_reason;
+    EXPECT_TRUE(has_law(r.violations, Law::O4));
+}
+
+TEST(SetRemoveLawTest, ReportsANoOpSetOnADocumentHoldingAnOutOfRangeNumber) {
+    NoOpSetSut sut;
+    const LawResult r = check_set_remove(sut, "[1e309]", kCfg);
+    EXPECT_TRUE(r.evaluated) << r.skip_reason;
+    const OracleViolation* v = first_of(r.violations, Law::O4);
+    ASSERT_NE(v, nullptr);
+    EXPECT_EQ(v->pointer, "/1") << "the fresh index is the array's size, 1";
+}
 
 TEST(SetRemoveLawTest, PassesOnTheToyAndIsEvaluated) {
     ToySut sut;
@@ -547,7 +682,7 @@ TEST(CheckAllTest, RejectionLeavesEveryLawUnevaluated) {
 // caller's back, and would put a second copy of the law-to-check mapping outside the oracle.
 TEST(CheckAllTest, EverySkippedLawCarriesItsReasonAndEveryEvaluatedLawIsSilent) {
     ToySut sut;
-    const auto report = check_all(sut, "[1e309]", kCfg);
+    const auto report = check_all(sut, R"(["\ud800"])", kCfg);
     for (size_t i = 0; i < kLawCount; ++i) {
         if (report.evaluated[i]) {
             EXPECT_TRUE(report.skip_reasons[i].empty())
@@ -561,6 +696,15 @@ TEST(CheckAllTest, EverySkippedLawCarriesItsReasonAndEveryEvaluatedLawIsSilent) 
     EXPECT_FALSE(report.evaluated[law_index(OracleViolation::Law::O4)]);
     EXPECT_EQ(report.skip_reasons[law_index(OracleViolation::Law::O3)],
               "the reference cannot model the canonical text");
+}
+
+TEST(CheckAllTest, AnOutOfRangeNumberLeavesNoLawSkippedOnTheToy) {
+    ToySut sut;
+    const auto report = check_all(sut, R"({"a":1,"b":1e309})", kCfg);
+    for (size_t i = 0; i < kLawCount; ++i) {
+        EXPECT_TRUE(report.evaluated[i]) << "law index " << i << ": " << report.skip_reasons[i];
+    }
+    EXPECT_TRUE(report.violations.empty()) << report.violations.front().message;
 }
 
 } // namespace

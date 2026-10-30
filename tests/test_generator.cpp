@@ -1,10 +1,13 @@
 #include <jsonfuzz/generator.hpp>
 #include <jsonfuzz/sut.hpp>
 
+#include "src/jsonfuzz_reference.hpp"
+
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -120,9 +123,14 @@ public:
 };
 
 void expect_intent_matches(const Intent& intent, const std::string& text) {
+    // A number a double cannot hold is counted on the tagged text, as the string it becomes
+    // there, and then counted back as the number it is.
+    const auto tagged = jsonfuzz::detail::tag_unmodelable_numbers(text);
     SaxCounter counter;
-    ASSERT_TRUE(nlohmann::json::sax_parse(text, &counter)) << "text: " << text;
-    const Counts& c = counter.counts;
+    ASSERT_TRUE(nlohmann::json::sax_parse(tagged.text, &counter)) << "text: " << text;
+    Counts c = counter.counts;
+    c.strings -= tagged.tagged;
+    c.numbers += tagged.tagged;
     EXPECT_EQ(intent.object_count, c.objects);
     EXPECT_EQ(intent.array_count, c.arrays);
     EXPECT_EQ(intent.string_count, c.strings);
@@ -133,7 +141,9 @@ void expect_intent_matches(const Intent& intent, const std::string& text) {
 }
 
 TEST(GeneratorTotalityTest, DefaultOptionsParseAndIntentAgrees) {
-    const GenOptions options; // adversarial_weight = 0, so nlohmann parses everything
+    // adversarial_weight = 0: valid JSON, which nlohmann parses once the numbers a double
+    // cannot hold (emitted at any weight) are tagged by their text.
+    const GenOptions options;
     std::vector<std::vector<uint8_t>> streams;
     streams.push_back({});     // empty stream
     streams.push_back({0x00}); // single zero
@@ -148,7 +158,9 @@ TEST(GeneratorTotalityTest, DefaultOptionsParseAndIntentAgrees) {
         ByteSource bytes(stream.data(), stream.size());
         const Generated g = generate(options, bytes);
         nlohmann::json j;
-        ASSERT_NO_THROW(j = nlohmann::json::parse(g.text)) << "text: " << g.text;
+        ASSERT_NO_THROW(
+            j = nlohmann::json::parse(jsonfuzz::detail::tag_unmodelable_numbers(g.text).text))
+            << "text: " << g.text;
         expect_intent_matches(g.intent, g.text);
         EXPECT_LE(g.intent.max_depth_reached, options.max_depth);
         ++ran;
@@ -297,6 +309,73 @@ TEST(GeneratorReachTest, NumberTextFormsReachableAtZeroAdversarialWeight) {
     EXPECT_GE(docs_with_negative_zero * 25, docs_with_numbers)
         << "a bare -0 is rare at weight 0: " << docs_with_negative_zero << " of "
         << docs_with_numbers << " number-bearing documents";
+}
+
+bool is_number(const std::string& v) {
+    return !v.empty() && (v[0] == '-' || (v[0] >= '0' && v[0] <= '9'));
+}
+
+bool huge_exponent(const std::string& v) {
+    const auto e = v.find_first_of("eE");
+    return is_number(v) && e != std::string::npos && v.size() - e - 1 >= 10;
+}
+
+bool long_digits(const std::string& v) {
+    return is_number(v) && v.find_first_not_of("-0123456789") == std::string::npos
+           && v.size() >= 310;
+}
+
+// A number a double cannot hold: nlohmann throws out_of_range.406 on it.
+bool out_of_range_form(const std::string& v) {
+    return v == "1e309" || v == "-1e309" || v == "1e9999" || huge_exponent(v) || long_digits(v);
+}
+
+TEST(GeneratorReachTest, OutOfRangeNumbersReachableAtZeroAdversarialWeight) {
+    // O3 and O4 compare a number a double cannot hold by its text. They only see that class if
+    // the fuzz target's generator (adversarial_weight = 0) emits it: before this, 1e309 was
+    // adversarial-only, so no campaign ever put such a number in front of the two laws. Every
+    // form must appear, and the intent record must flag exactly the documents holding one.
+    GenOptions options; // adversarial_weight = 0
+    ToySut sut;
+    const jsonfuzz::ParseConfig cfg;
+    bool saw_1e309 = false;
+    bool saw_minus_1e309 = false;
+    bool saw_1e9999 = false;
+    bool saw_huge_exponent = false;
+    bool saw_long_digits = false;
+    // About 1 short document in 100 holds one (each number takes the form with p = 1/48), so
+    // the sample is wide enough for all five forms to appear.
+    for (uint64_t seed = 0; seed < 5000; ++seed) {
+        const auto stream = bytes_from_seed(seed, 200);
+        ByteSource bytes(stream.data(), stream.size());
+        const Generated g = generate(options, bytes);
+        ASSERT_TRUE(sut.parse(g.text, cfg).accepted) << "text: " << g.text;
+        // Holding one is judged on the TEXT (outside strings): a duplicated key can hide a
+        // member from the toy's walk. The walk only names which forms appeared.
+        const bool holds = jsonfuzz::detail::tag_unmodelable_numbers(g.text).tagged > 0;
+        for (const auto& p : sut.pointers(256)) {
+            const std::optional<std::string> got = sut.get(p);
+            if (!got.has_value()) {
+                ADD_FAILURE() << "get() has no value for an enumerated pointer: " << p;
+                continue;
+            }
+            const std::string& v = *got;
+            if (!out_of_range_form(v)) {
+                continue;
+            }
+            saw_1e309 = saw_1e309 || v == "1e309";
+            saw_minus_1e309 = saw_minus_1e309 || v == "-1e309";
+            saw_1e9999 = saw_1e9999 || v == "1e9999";
+            saw_huge_exponent = saw_huge_exponent || huge_exponent(v);
+            saw_long_digits = saw_long_digits || long_digits(v);
+        }
+        EXPECT_EQ(g.intent.has_out_of_range_number, holds) << "text: " << g.text;
+    }
+    EXPECT_TRUE(saw_1e309) << "no 1e309 at weight 0";
+    EXPECT_TRUE(saw_minus_1e309) << "no -1e309 at weight 0";
+    EXPECT_TRUE(saw_1e9999) << "no 1e9999 at weight 0";
+    EXPECT_TRUE(saw_huge_exponent) << "no exponent of 10+ digits at weight 0";
+    EXPECT_TRUE(saw_long_digits) << "no integer of 310+ digits at weight 0";
 }
 
 TEST(GeneratorAdversarialTest, BoundaryNumberTextIsPresent) {

@@ -1,3 +1,5 @@
+#include "src/jsonfuzz_reference.hpp"
+
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
@@ -72,9 +74,13 @@ std::string read_file(const std::string& path) {
     return out;
 }
 
+// Valid JSON (RFC 8259 sets no limit on a number's magnitude). nlohmann throws on a number a
+// double cannot hold, and the generator emits such numbers, so the text is parsed with them
+// tagged — the reference's own view (src/jsonfuzz_reference.hpp).
 bool parses_as_json(const std::string& text) {
     try {
-        const nlohmann::json parsed = nlohmann::json::parse(text);
+        const nlohmann::json parsed
+            = nlohmann::json::parse(jsonfuzz::detail::tag_unmodelable_numbers(text).text);
         (void)parsed;
         return true;
     } catch (...) {
@@ -121,6 +127,19 @@ TEST(CliTest, GenWritesIntentSidecar) {
     ASSERT_FALSE(side.empty()) << "no intent sidecar written";
     EXPECT_NE(side.find("object_count"), std::string::npos);
     EXPECT_NE(side.find("max_depth_reached"), std::string::npos);
+}
+
+TEST(CliTest, GenIntentSidecarFlagsAnOutOfRangeNumber) {
+    // Seed 6 emits a number a double cannot hold; the sidecar must say so.
+    const std::string ip = temp_path("gen_intent_huge.json");
+    const RunResult r = run({"gen", "--seed", "6", "--intent", ip});
+    ASSERT_EQ(r.status, 0);
+    const std::string side = read_file(ip);
+    ::remove(ip.c_str());
+    ASSERT_TRUE(r.out.find("1e309") != std::string::npos
+                || r.out.find("1e9999") != std::string::npos)
+        << r.out;
+    EXPECT_NE(side.find("\"has_out_of_range_number\": true"), std::string::npos) << side;
 }
 
 TEST(CliTest, GenUnknownFlagFails) { EXPECT_EQ(run({"gen", "--definitely-not-a-flag"}).status, 2); }
@@ -174,9 +193,10 @@ TEST(CliTest, CheckToyOnValidJsonSummarisesAllSevenLawsRan) {
 }
 
 TEST(CliTest, CheckNamesEverySkippedLawAndItsReason) {
-    // 1e309 is valid JSON the reference (nlohmann) cannot model: O3 and O4 examine nothing.
+    // A lone surrogate is valid JSON text the reference (nlohmann) cannot model: O3 and O4
+    // examine nothing, and the summary must say so.
     const std::string in = temp_path("check_skip.json");
-    write_file(in, R"({"a":1,"b":1e309})");
+    write_file(in, R"({"a":1,"b":"\ud800"})");
     const RunResult r = run({"check", "--sut", "toy", "--in", in});
     ::remove(in.c_str());
     ASSERT_EQ(r.status, 0) << r.out;
@@ -193,15 +213,39 @@ TEST(CliTest, CheckNamesEverySkippedLawAndItsReason) {
 }
 
 TEST(CliTest, CheckBrokenSiblingOnAnUnmodellableDocumentIsNotReportedClean) {
-    // The defect as measured: broken-sibling answers every pointer with its sibling's value,
-    // but on this document O3 skips, so the old silent exit 0 read as "clean".
+    // broken-sibling answers every pointer with its sibling's value, but on a document the
+    // reference cannot model O3 skips: the summary must not read as "clean".
     const std::string in = temp_path("check_sibling_skip.json");
-    write_file(in, R"({"a":1,"b":1e309})");
+    write_file(in, R"({"a":1,"b":"\ud800"})");
     const RunResult r = run({"check", "--sut", "broken-sibling", "--in", in});
     ::remove(in.c_str());
     EXPECT_EQ(r.status, 0) << r.out;
     EXPECT_NE(r.out.find("O3 pointer-value: "), std::string::npos) << r.out;
     EXPECT_NE(r.out.find("skipped"), std::string::npos) << r.out;
+}
+
+TEST(CliTest, CheckToyOnAnOutOfRangeNumberRunsAllSevenLaws) {
+    // 1e309 does not fit a double; nlohmann throws on it. O3 and O4 used to skip it.
+    const std::string in = temp_path("check_huge_ok.json");
+    write_file(in, R"({"a":1,"b":1e309})");
+    const RunResult r = run({"check", "--sut", "toy", "--in", in});
+    ::remove(in.c_str());
+    ASSERT_EQ(r.status, 0) << r.out;
+    EXPECT_EQ(r.out, "check: 7 laws ran, 0 skipped, 0 violations\n");
+}
+
+TEST(CliTest, CheckBrokenSiblingOnAnOutOfRangeNumberIsAnO3Violation) {
+    // The defect as measured: on this document broken-sibling was reported with exit 0
+    // because O3 examined nothing. The shipped sabotage must now be caught here.
+    const std::string in = temp_path("check_sibling_huge.json");
+    write_file(in, R"({"a":1,"b":1e309})");
+    const RunResult r = run({"check", "--sut", "broken-sibling", "--in", in});
+    ::remove(in.c_str());
+    ASSERT_EQ(r.status, 1) << r.out;
+    EXPECT_NE(r.out.find("O3 pointer-value violation"), std::string::npos) << r.out;
+    EXPECT_NE(r.out.find("pointer: /a"), std::string::npos) << r.out;
+    EXPECT_NE(r.out.find("expected: 1\n"), std::string::npos) << r.out;
+    EXPECT_NE(r.out.find("actual: 1e309"), std::string::npos) << r.out;
 }
 
 TEST(CliTest, CheckRejectedInputSaysNoLawEvaluated) {

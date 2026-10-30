@@ -14,6 +14,45 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-10-30 — O3 and O4 examined nothing on any document holding a number a double cannot hold
+
+What broke:        The reference of O3 (pointer value) and O4 (set-then-remove) is nlohmann, which
+                   throws out_of_range.406 on 1e309, -1e309, 1e9999, a huge exponent or a 400-digit
+                   integer. On any document holding one, both laws returned "the reference cannot
+                   model the canonical text". These are the two laws that catch a wrong but valid
+                   answer. `check --sut broken-sibling` on {"a":1,"b":1e309} exited 0 although that
+                   shipped sabotage answers /a with 1e309. Measured on 17 fixed documents: O3 ran on 6
+                   and O4 on 5. The generator emitted the class only at adversarial weight, so no
+                   campaign ever put one in front of the laws. A toy get() that clamps an overflowing
+                   number (S9) survived 10 s both with the old reference and with the old generator.
+                   Run A (the same day) made the skip visible in the CLI summary. This entry is the
+                   fix that stops the skip from happening.
+Check added:       `src/jsonfuzz_reference.{hpp,cpp}`: before the reference parses, each number a
+                   double cannot hold is rewritten into a tagged string holding its exact text. Such
+                   numbers compare by text; every other number still compares by value. A
+                   document already spelling the tag is skipped by name, and the tags are counted
+                   with SAX so a dropped duplicate cannot hide one. The generator emits the five
+                   forms at any weight (`Intent::has_out_of_range_number`), and reading 3 counts them.
+                   Tests (tests stage): `PointerValueLawTest.EvaluatesADocumentHoldingANumberOutside
+                   DoubleRange`, `…ReportsASiblingGetterOnADocumentHoldingAnOutOfRangeNumber`,
+                   `…ComparesOutOfRangeNumbersByTheirText`, `…AStringNeverEqualsAnOutOfRangeNumber`,
+                   `…AnOutOfRangeNumberUnderADroppedDuplicateIsNotATagCollision`,
+                   `SetRemoveLawTest.*OutOfRangeNumber`,
+                   `CliTest.CheckBrokenSiblingOnAnOutOfRangeNumberIsAnO3Violation`,
+                   `GeneratorReachTest.OutOfRangeNumbersReachableAtZeroAdversarialWeight`,
+                   `ReadingsTest.GeneratedOutOfRangeNumbersReachO3AndO4`, `ReferenceTagTest.*`.
+                   The fuzz stage now meets the class in every campaign.
+Why it must stay:  Without the pre-pass, O3/O4 go silent again on the whole class, and a SUT that
+                   gets these numbers wrong in get() is reported clean whenever one is present.
+                   Without the generator forms, the laws can see the class but never receive it
+                   (S9 + old generator: 37,354 runs, survived). Without the SAX count, the first
+                   version skipped 3 of 682 generated documents as false "tag collisions" (a
+                   number under a dropped duplicate key). Without the text comparison, two
+                   overflowing numbers would compare equal and a wrong one would pass (sabotage B).
+                   Twelve sabotages, the measurements and the comparison cost (an overflowing
+                   number spelled differently by get() and serialize() is a violation) are in
+                   `docs/fuzz-oracle-reach.md` § B6. Lone surrogates are still outside the reference.
+
 ## 2026-10-30 — two stages graded a binary the sources no longer built, and reported it green
 
 What broke:        `scripts/tests.sh` ran ctest and nothing else, and `scripts/cli.sh` ran the CLI

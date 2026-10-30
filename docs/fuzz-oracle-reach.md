@@ -3,8 +3,169 @@
 This document records whether the oracle has teeth (sabotages, control first) and how much
 of the input space actually reaches each law. It is the honest companion to the reach guard:
 "a counter is non-zero" is not evidence of reach, so the numbers below are the evidence.
-B5 (the v0.3 laws, newest) comes first; B3 (O1/O2) is kept below it unchanged, except that
-its "cannot see" list is now superseded by B5's.
+B6 (numbers a double cannot hold, newest) comes first, then B5 (the v0.3 laws), then B3
+(O1/O2). Each older "cannot see" list is superseded by the newer one, and the B5 list has
+been corrected where B6 made it untrue.
+
+# B6 — O3 and O4 on numbers a double cannot hold
+
+## The defect
+
+O3 and O4 used nlohmann as their reference. nlohmann throws `out_of_range.406` on any JSON
+number a double cannot hold (`1e309`, `-1e309`, `1e9999`, `1e99999999999999999999`, a
+400-digit integer). So on any document holding one, the two laws that exist to catch a
+*wrong but valid* answer examined nothing. `check --sut broken-sibling` on `{"a":1,"b":1e309}`
+exited 0, although that SUT answers `/a` with `1e309`. The generator emitted such numbers only
+at adversarial weight, so no fuzz campaign put one in front of the laws either.
+
+## The design: the reference tags what it cannot hold
+
+Before the reference parses a text, `src/jsonfuzz_reference.hpp` (private) rewrites every
+number token outside a string whose value overflows a double into the string
+`"\u0000jsonfuzz-number:<token>"`. The overflow test is strtod giving ±inf, the same test
+nlohmann applies. nlohmann then models the document. The same pre-pass is applied to the
+canonical text, to every `get()` answer and to the duplicate-key scan of O3 and O4. Reading 3's
+SAX counter also uses it, counting each tagged string back as a number. Nothing else changed:
+O1, O2, O5, O6 and O7 do not use it.
+
+**Comparison semantics, stated plainly:**
+
+- A number a double **can** hold still compares by value, exactly as before: `1.0 == 1`,
+  `-0 == 0`, `1e-400 == 0`, and a 24-digit integer compares as its double.
+- A number a double **cannot** hold compares by its **exact text**: `1e309 == 1e309`, but
+  `1e309 != 1E309 != 1e+309 != 10e308`. It never equals an in-range number or a string.
+- **What that costs.** A SUT whose `get()` spells such a number differently from its
+  `serialize()` gets an O3 violation, even if the two spellings are the same number. A SUT
+  that normalizes the text *consistently* (the same spelling in both) is fine. A SUT that
+  clamps or rewrites an overflowing number in `get()` only is caught (S9 below), which is the
+  point. A number that overflows is never compared numerically, so a SUT that answers `1e309`
+  for `1e309` passes no matter what it holds internally.
+- A document whose canonical text holds a genuine string spelling the tag is **skipped**
+  ("the canonical text holds a string spelling the reference's number tag"). The tagged
+  strings are counted with SAX (every value, duplicates included) against the number tagged.
+  A `get()` answer holding an extra tag-spelling string is a violation, never a pass.
+- The SUT is never the reference, and neither is the toy. The pre-pass is
+  `src/jsonfuzz_reference.{hpp,cpp}` (137 lines with comments) plus a SAX tag counter in the
+  oracle (about 25 lines). It runs on nlohmann and adds no dependency.
+
+## Before and after, per law (the toy and the shipped sabotage)
+
+The same 17 documents were run through the shipped CLI and the new one: the six
+out-of-range documents above; `{"a":1e308}`; `[-0,1.0]`; an escaped key; a duplicated key; a
+lone surrogate; a document spelling the tag next to `1e309`; `1e-400`; nested empty containers;
+`not json`; `{"a":1e309,"b":2e309}`; and `[1e309,1]`.
+
+| Law | toy before | toy after | broken-sibling before | broken-sibling after |
+|---|---|---|---|---|
+| O1 round-trip | 16 ran / 1 skip | 16 / 1 | 16 / 1 | 16 / 1 |
+| O2 pointer-contract | 16 / 1 | 16 / 1 | 16 / 1 | 16 / 1 |
+| O3 pointer-value | **6 / 11** | **14 / 3** | **6 / 11** | **14 / 3** |
+| O4 set-then-remove | **5 / 12** | **12 / 5** | 0 / 17 (no write path) | 0 / 17 |
+| O5 preset-agreement | 16 / 1 | 16 / 1 | 0 / 17 (one mode) | 0 / 17 |
+| O6 number-text | 15 / 2 | 15 / 2 | 0 / 17 (undeclared) | 0 / 17 |
+| O7 strict-subset | 16 / 1 | 16 / 1 | 16 / 1 | 16 / 1 |
+
+O3's three remaining skips are `not json`, the lone surrogate and the tag-spelling document.
+O4 also skips the two scalar roots, `-1e309` and `1e-400`. broken-sibling went from exit 0 to
+**exit 1** on `{"a":1,"b":1e309}` (`O3 pointer-value violation`, `pointer: /a`, `expected: 1`,
+`actual: 1e309`) and on `{"a":1e309,"b":2e309}` (`expected: 1e309`, `actual: 2e309`). The
+O1/O2/O5/O6/O7 verdicts (ran/skipped, the reason, each violation named) were compared document
+by document over `fuzz/seeds`, `fuzz/regressions` and these 17 documents, for the toy,
+broken-sibling and broken-comma: byte-identical before and after.
+
+## Sabotage table (unit level)
+
+Each break was made in a `/tmp` copy, rebuilt, and the suite run. The file was restored with
+a fresh mtime and the suite was green again after every one. (A first pass restored with an
+older mtime, so make did not rebuild it and the breaks piled up. That pass was discarded.)
+
+| # | Break | Tests that went red (selection) |
+|---|---|---|
+| A | the tagger never tags | `PointerValueLawTest.EvaluatesADocumentHoldingANumberOutsideDoubleRange`, `…ReportsASiblingGetterOnADocumentHoldingAnOutOfRangeNumber`, `SetRemoveLawTest.ReportsAStickyRemoveOnADocumentHoldingAnOutOfRangeNumber`, `CliTest.CheckBrokenSiblingOnAnOutOfRangeNumberIsAnO3Violation`, `ReadingsTest.IntentMatchesATextHoldingAnOutOfRangeNumber` (+15) |
+| B | **the reference is wrong**: the tag drops the number's text, so every overflowing number equals every other | `PointerValueLawTest.ComparesOutOfRangeNumbersByTheirText` (a `get()` answering `2e309` for `1e309` passed), `ReferenceTagTest.TagsEveryNumberADoubleCannotHold`, `…TagsAnIntegerTooLongForADouble` |
+| C | the tag-collision count is removed | `PointerValueLawTest.AStringNeverEqualsAnOutOfRangeNumber` (a string spelling the tag passed as `1e309`), `…ADocumentSpellingTheReferencesTagIsASkipNotAPass`, `…ATagSpellingStringUnderADroppedDuplicateIsStillASkip` |
+| D | the duplicate scan reads the raw canonical text | `PointerValueLawTest.ADuplicatedKeyAfterAnOutOfRangeNumberIsStillSeen`, `…AnOutOfRangeNumberUnderADroppedDuplicateIsNotATagCollision` |
+| E | the tagger ignores strings | `ReferenceTagTest.NeverTagsTextInsideAString`, `GeneratorReachTest.OutOfRangeNumbersReachableAtZeroAdversarialWeight` |
+| F | **the reference is wrong the other way**: every number is tagged (compared by text) | `ReferenceTagTest.LeavesEveryNumberADoubleCanHoldUntouched`, `CheckAllTest.EveryLawIsEvaluatedAndCleanOnTheToy`, `SetRemoveLawTest.PassesOnTheToyAndIsEvaluated` (+8) |
+| G | reading 3 does not count tagged numbers back | `ReadingsTest.IntentMatchesATextHoldingAnOutOfRangeNumber`, `…IntentMatchesTextForGeneratedDocuments`, `…GeneratedOutOfRangeNumbersReachO3AndO4` |
+| H | the generator never sets `has_out_of_range_number` | `GeneratorReachTest.OutOfRangeNumbersReachableAtZeroAdversarialWeight`, `CliTest.GenIntentSidecarFlagsAnOutOfRangeNumber`, `ReadingsTest.GeneratedOutOfRangeNumbersReachO3AndO4` |
+| I | the generator's out-of-range slot is unreachable | the same three |
+| J | reports show the tag instead of the number | `PointerValueLawTest.ComparesOutOfRangeNumbersByTheirText` |
+| K | the CLI sidecar drops the flag | `CliTest.GenIntentSidecarFlagsAnOutOfRangeNumber` |
+| L | tags are counted in the tree, not with SAX | `PointerValueLawTest.AnOutOfRangeNumberUnderADroppedDuplicateIsNotATagCollision`, `…ATagSpellingStringUnderADroppedDuplicateIsStillASkip` |
+
+L is a defect the reach measurement found in the first version of this change, not a
+hypothetical. Counting tags in nlohmann's tree under-counts when the tree drops an earlier
+duplicate. On generated documents, 3 of 682 that held an overflowing number were skipped as
+"tag collisions". The fix (a SAX count) was driven by the two L tests, written and run RED
+first.
+
+## Campaigns (fuzz target, toy SUT, seeds only, fresh corpus, `/tmp` copy)
+
+| # | Sabotage | Result | Runs / time | Report source |
+|---|---|---|---|---|
+| control | none, 60 s | exit 0, no artifact | 86,915 runs | — |
+| S9 | toy `get()` answers an overflowing number with `1.7976931348623157e308` (valid JSON, and `serialize()` untouched) | **found**, RC=77 | 3.9 s wall | O3 property: `get() disagrees with the independent walk` |
+| S9 + old reference | S9, with the oracle's tagging disabled (the generator still emits the numbers) | **survived**, exit 0 | 37,935 runs in 10 s | O3 skipped 29 inputs |
+| S9 + old generator | S9, with the generator's out-of-range slot disabled (the reference fixed) | **survived**, exit 0 | 37,354 runs in 10 s | — |
+| S7b (B5's survivor) | toy `serialize_value` emits `1e309` as `inf` | **found**, RC=77 (it SURVIVED 10 s in B5) | 1.3 s wall | O1: `serialize() output does not reparse: "inf"`, O2 likewise |
+
+So both halves are needed. With the old reference the class reaches the generator but not the
+law, and with the old generator it reaches the law but never arrives. Disabling the tagging in
+reading 3 as well (sabotage A in a fuzz build) crashes the target within a second on
+`intent_mismatch=1`, because reading 3's counter cannot parse the new numbers.
+
+Control law counts (60 s): O1, O2, O3, O5, O7 on 86,915 of 86,915; O4 on 47,133 (54%: scalar
+roots); O6 on 77,416 (89%: duplicated keys). In this session, a 60 s control on the first
+version of the change (before the SAX count) ran 231,925 inputs and skipped O3 on 6. The run
+count differs by host load (load average 2–3.7 on 4 cores, shared). The cost is measured
+below instead.
+
+## Reach
+
+The generator emits the five forms in an eighth slot of its number-text branch, at any weight,
+with p = 1/48 per number. That slot is not on the zero-tail path (index 0 stays `-0`). Measured
+with 100,000 random byte streams per length:
+
+| Input length | Documents holding an overflowing number | O3 evaluated on them | O4 evaluated on them |
+|---|---|---|---|
+| 1–16 bytes | 408 (0.41%) | 408 (100%) | 64 (every container root) |
+| 1–64 bytes | 682 (0.68%) | 682 (100%) | 285 (every container root) |
+| 1–200 bytes | 1,074 (1.07%) | 1,074 (100%) | 679 (every container root) |
+
+Before B6, every one of these numbers was 0: the generator never emitted the class at weight 0.
+At the gate's ~4,000 exec/s this is a few hundred such documents per 10 s campaign. The gate's
+fuzz stage ran **36,515** inputs in 10 s on the final code (45,790 on an earlier run of the stage,
+before the SAX count), with no finding. Reading 3
+still parses 100% of its texts (`r3_accept` = total).
+
+**Cost.** The same 2,000 fixed pseudo-random inputs (`-runs=0`) were run three times,
+interleaved, through three builds. Mean user CPU: final 0.89 s, oracle tagging disabled 0.91 s,
+SAX count disabled 0.90 s. That is about 0.45 ms per input in each build, so there is no
+measurable cost (B5 measured 0.43 ms).
+
+## What the oracle still cannot see after B6
+
+- **Lone surrogates** (and a lenient SUT's lazy numbers such as `-01`) are still outside the
+  reference, so O3/O4 skip them, by name. Only numbers were brought in.
+- **Mutation does not reach the class.** `mutate()` first checks that nlohmann parses its input,
+  and returns a document holding an overflowing number unchanged. Reading 1's mutated text is
+  then the generated text again, and reading 2 reaches the class only through raw bytes. The
+  class reaches the laws from the generator, unmutated.
+- **Overflowing numbers compare by text, not value.** `1e309` and `10e308` are different
+  answers to O3. For a SUT that keeps one spelling this is exact. A SUT whose `get()` and
+  `serialize()` spell the same overflowing number differently is reported. Underflowing numbers
+  (`1e-400`) are held by a double as 0 and still compare by value.
+- **O6's duplicate scan still reads the raw input**, so it stops at an overflowing number. A
+  duplicated key *after* one is not seen, and O6 then runs where it would otherwise skip. This
+  is left as it was on purpose: changing it would change O6 verdicts, and B6 is not allowed to
+  touch O1/O2/O5/O6/O7. On the toy this cannot cause a false violation (the toy keeps every
+  number text). For a SUT that drops a duplicate it could.
+- **A document spelling the tag** (`"\u0000jsonfuzz-number:…"` as a string) is skipped by O3/O4.
+- **The overflow test assumes the "C" locale** for strtod. JSONFuzz never calls `setlocale`. A
+  host program that does could misjudge a number with a fraction. That makes the reference
+  fail on it, which is a skip, never a false violation.
+
 
 # B5 — the v0.3 laws (wrong-but-valid answers)
 
@@ -18,7 +179,7 @@ on the property path becomes a named violation of the law that made the call.
 
 | Law | Property | Needs from the SUT |
 |---|---|---|
-| O3 pointer-value | `get(p)` equals the value an independent walk (nlohmann) of the canonical text finds at `p` | nothing new |
+| O3 pointer-value | `get(p)` equals the value an independent walk (nlohmann; since B6, numbers a double cannot hold compared by text) of the canonical text finds at `p` | nothing new |
 | O4 set-then-remove | `set(fresh, v)` applies, `get(fresh)` == v, `remove(fresh)` applies, `serialize()` == canonical | `set` / `remove` (optional; `Unsupported` = skip) |
 | O5 preset-agreement | every `serialize_mode(m)` reparses to the same canonical text and is byte-stable | `serialize_mode_count()` ≥ 2 (default 1 = skip) |
 | O6 number-text | every number token of the input appears in the reparsed canonical text | `preserves_number_text()` declared (default false = skip) |
@@ -53,7 +214,7 @@ Control (final code): 60 s, exit 0, zero artifacts, 222,234 runs, every law eval
 | S6 | O5 | `serialize_pretty`: a 2+ element array drops its last element (valid JSON) | Yes, RC=77 | `crash-907e159d…` (84 bytes; a seed) | 0.28 | O5 property: "mode 1 reparses to a different document", `…[1,2,3]…` vs `…[1,2]…` |
 | S7 | O6 | `serialize_value`: the number text `-0` is emitted as `0` | Yes after the generator fix, RC=77 (survived 10 s before it) | `crash-22ea1c64…` (1 byte) | 0.28 | O6 property: `expected: -0`, `actual: 0` |
 | S8 | O7 | `parse_number`: with `strict_numbers = false`, reject any exponent | Yes, RC=77 | `crash-0731c0b6…` (7 bytes; a seed) | 0.27 | O7 property: input `-850.0e0`, "strict accepted, lazy rejected" |
-| S7b | O6 | `serialize_value`: the number text `1e309` is emitted as `inf` | **No** — exit 0, zero artifacts, 51,569 runs in 10 s | — | survived | (see "still cannot see") |
+| S7b | O6 | `serialize_value`: the number text `1e309` is emitted as `inf` | **No** — exit 0, zero artifacts, 51,569 runs in 10 s (re-run after B6: found in 1.3 s) | — | survived | (see "still cannot see") |
 
 Every finding came from the PROPERTY (a `VIOLATION <law>` line printed before the trap), not
 from the exception floor: no campaign log holds an uncaught exception, a `terminate`, or an
@@ -125,18 +286,17 @@ in this session). Every sabotage above was still found in under a second.
 
 ## What the oracle still cannot see after B5
 
-- **Number texts the generator cannot produce.** `1e309` → `inf` (S7b) SURVIVED 10 s. The
-  laws catch it at once if the input holds `1e309` (O1, O2 and O5 all fire, because `inf` is
-  not JSON), but the fuzz target never generates `1e309` at weight 0. The reference parser
-  rejects it, and reading 3 needs reference-parseable text. Reading 2 could reach it only
-  through raw bytes, and reading 2 accepts about 1.8% of its inputs. The same holds for every
-  adversarial-only form: lone surrogates, raw control characters, empty and duplicated keys
-  from the generator.
+- **Number texts the generator cannot produce.** *(Corrected by B6: `1e309` and four other
+  overflowing forms are now emitted at weight 0, and S7b dies in 1.3 s.)* Still true for
+  every other adversarial-only form: lone surrogates, raw control characters, empty and
+  duplicated keys from the generator. Reading 2 could reach those only through raw bytes, and
+  reading 2 accepts about 1.8% of its inputs.
 - **O3 compares values, not texts.** Equality is nlohmann's: `1.0 == 1` and `-0 == 0`. A
   `get()` that returns the wrong member is invisible when that member holds an equal value
   (S4 on `{"a":1,"b":1}`). The text level belongs to O6. O3 skips documents the reference
-  cannot model (`1e309`, lone surrogates, a lenient SUT's lazy numbers such as `-01`), and
-  pointers that pass through a duplicated key.
+  cannot model (lone surrogates, a lenient SUT's lazy numbers such as `-01`), and pointers
+  that pass through a duplicated key. *(Corrected by B6: `1e309` and every other number a
+  double cannot hold is no longer skipped. It is compared by its exact text.)*
 - **Consistency is not correctness.** O3 checks `get()` against `serialize()`. A parser that
   drops or alters a member in its *model* has a consistent `get` and `serialize`, and O1, O2
   and O3 all pass it. Likewise, O3 only walks the pointers the SUT enumerates: a member that

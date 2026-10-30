@@ -120,4 +120,38 @@ TEST(ReadingsTest, AV03ViolationReachesTheReadingsResult) {
     EXPECT_TRUE(res.law_evaluated[jsonfuzz::law_index(jsonfuzz::OracleViolation::Law::O3)]);
 }
 
+TEST(ReadingsTest, IntentMatchesATextHoldingAnOutOfRangeNumber) {
+    // Reading 3's counter is nlohmann SAX, which stops at 1e309 (out_of_range.406). The
+    // generator now emits such numbers at weight 0, so the counter must count them as numbers.
+    jsonfuzz::Intent it;
+    it.array_count = 1;
+    it.number_count = 3;
+    it.total_members = 3;
+    EXPECT_TRUE(intent_matches_text(it, "[1e309,-1e9999,1]"));
+    it.number_count = 2;
+    it.string_count = 1;
+    EXPECT_FALSE(intent_matches_text(it, "[1e309,-1e9999,1]")) << "a tagged number is not a string";
+}
+
+TEST(ReadingsTest, GeneratedOutOfRangeNumbersReachO3AndO4) {
+    const jsonfuzz::GenOptions options;
+    int holding = 0;
+    for (uint64_t seed = 0; seed < 1000; ++seed) {
+        const auto stream = bytes_from_seed(seed, 200);
+        jsonfuzz::ByteSource bytes(stream.data(), stream.size());
+        const auto g = jsonfuzz::generate(options, bytes);
+        if (!g.intent.has_out_of_range_number) {
+            continue;
+        }
+        ++holding;
+        EXPECT_TRUE(intent_matches_text(g.intent, g.text)) << "text: " << g.text;
+        const auto res = run_readings(stream.data(), stream.size());
+        EXPECT_FALSE(res.intent_mismatch) << "text: " << g.text;
+        EXPECT_TRUE(res.violations.empty()) << res.violations.front().message;
+        EXPECT_TRUE(res.law_evaluated[jsonfuzz::law_index(jsonfuzz::OracleViolation::Law::O3)])
+            << "text: " << g.text;
+    }
+    EXPECT_GT(holding, 0) << "the generator never emitted an out-of-range number at weight 0";
+}
+
 } // namespace

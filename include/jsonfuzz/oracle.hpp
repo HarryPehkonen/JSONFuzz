@@ -28,7 +28,8 @@
 /// escaping exception), and reports whether it was evaluated or skipped, and why:
 ///
 ///   O3 pointer value. For every p in pointers(d), get(p) equals the value an INDEPENDENT
-///      walk of the canonical text (nlohmann, the toolkit's own model) finds at p.
+///      walk of the canonical text (nlohmann, the toolkit's own model, with every number a
+///      double cannot hold tagged by its text) finds at p.
 ///   O4 set-then-remove. On an accepted document, set(fresh, v) then remove(fresh)
 ///      returns serialize() to the canonical text, and between the two get(fresh) == v.
 ///   O5 preset agreement. Every serialize_mode(m) reparses to the same document
@@ -96,11 +97,16 @@ std::vector<OracleViolation> check(SystemUnderTest& sut, std::string_view text,
 /// serialize(); for every p in pointers(d): the reference (nlohmann) parses `canonical`,
 /// walks p with its own RFC 6901 implementation, and get(p) must reparse (nlohmann) to an
 /// EQUAL value. Catches a get() that returns the right shape with the wrong member.
-/// Limits: equality is nlohmann's value equality — numbers compare numerically (1.0 == 1,
-/// -0 == 0: number TEXT is O6's job) — so a wrong member holding an equal value is
-/// invisible. Skipped when the reference cannot parse the canonical text (1e309, a lone
-/// surrogate). A pointer that passes THROUGH a duplicated key is skipped (the reference
-/// keeps the last duplicate, a SUT may keep the first; RFC 8259 leaves it undefined).
+/// Limits: equality is nlohmann's value equality — numbers a double holds compare numerically
+/// (1.0 == 1, -0 == 0: number TEXT is O6's job) — so a wrong member holding an equal value is
+/// invisible. A number a double CANNOT hold (1e309, -1e309, 1e9999, a 400-digit integer; nlohmann
+/// throws on it) is compared by its exact text instead: 1e309 == 1e309, but 1e309 != 1E309 !=
+/// 10e308, and it never equals an in-range number or a string. So get() and serialize() must
+/// spell such a number the same way. Skipped when the reference cannot parse the canonical text
+/// (a lone surrogate, a lenient SUT's lazy number), or when the canonical text holds a string
+/// spelling the reference's number tag ("\u0000jsonfuzz-number:..."). A pointer that passes
+/// THROUGH a duplicated key is skipped (the reference keeps the last duplicate, a SUT may keep
+/// the first; RFC 8259 leaves it undefined).
 LawResult check_pointer_values(SystemUnderTest& sut, std::string_view text,
                                const ParseConfig& config, int pointer_max_depth = 256);
 
@@ -111,8 +117,9 @@ LawResult check_pointer_values(SystemUnderTest& sut, std::string_view text,
 /// pointer path is exercised), or the array index == size — and:
 ///   set(fresh, v) must be Applied, get(fresh) must then equal v,
 ///   remove(fresh) must be Applied, and serialize() must equal canonical byte for byte.
-/// Deliberately EXCLUDED: removing a member that already existed (set over an existing
-/// key replaces it, so set-then-remove deletes the original — NOT the identity); a parent
+/// The reference is O3's (numbers a double cannot hold are modelled by their text), with the
+/// same two skips. Deliberately EXCLUDED: removing a member that already existed (set over an
+/// existing key replaces it, so set-then-remove deletes the original — NOT the identity); a parent
 /// the reference does not resolve is a skip, not a finding (it never becomes a write);
 /// pointers through duplicated keys are skipped. Skipped entirely when the SUT reports
 /// WriteResult::Status::Unsupported (no write path), or when the document has no
