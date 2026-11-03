@@ -548,6 +548,26 @@ TEST(NumberTextLawTest, ADuplicatedKeyIsASkip) {
     EXPECT_FALSE(r.evaluated);
 }
 
+// The duplicate scan must read the text the reference reads: nlohmann throws at 1e309 before
+// it reaches the second "a", so a scan of the raw text saw no duplicate and the law ran.
+TEST(NumberTextLawTest, ADuplicatedKeyAfterAnOutOfRangeNumberIsStillASkip) {
+    ToySut sut;
+    const LawResult r = check_number_text(sut, R"({"a":[1e309],"a":2})", kCfg);
+    EXPECT_FALSE(r.evaluated);
+    EXPECT_NE(r.skip_reason.find("duplicated key"), std::string::npos) << r.skip_reason;
+    EXPECT_TRUE(r.violations.empty());
+}
+
+// A scan that did not finish must not read as "no duplicates": the unseen rest of the document
+// may repeat a key, so the law skips and says the scan was incomplete.
+TEST(NumberTextLawTest, AScanThatCouldNotFinishIsASkipNotACleanRun) {
+    ToySut sut;
+    const LawResult r = check_number_text(sut, R"({"a":1,"a":)", kCfg);
+    EXPECT_FALSE(r.evaluated);
+    EXPECT_NE(r.skip_reason.find("incomplete"), std::string::npos) << r.skip_reason;
+    EXPECT_TRUE(r.violations.empty());
+}
+
 TEST(NumberTextLawTest, ASutThrowOnThePropertyPathIsANamedViolation) {
     ThrowingSerializeAfterReparseSut sut;
     LawResult r;

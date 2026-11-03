@@ -90,12 +90,12 @@ bool parses_as_json(const std::string& text) {
 
 } // namespace
 
-TEST(CliTest, VersionPrintsExactString) { EXPECT_EQ(run({"--version"}).out, "JSONFuzz 0.2.0\n"); }
+TEST(CliTest, VersionPrintsExactString) { EXPECT_EQ(run({"--version"}).out, "JSONFuzz 0.2.1\n"); }
 
 TEST(CliTest, HelpExitsZeroAndNamesTheBinary) {
     const RunResult r = run({"--help"});
     EXPECT_EQ(r.status, 0);
-    EXPECT_EQ(r.out.substr(0, 14), "JSONFuzz 0.2.0");
+    EXPECT_EQ(r.out.substr(0, 14), "JSONFuzz 0.2.1");
 }
 
 TEST(CliTest, UnknownVerbFailsWithUsageError) {
@@ -194,16 +194,20 @@ TEST(CliTest, CheckToyOnValidJsonSummarisesAllSevenLawsRan) {
 
 TEST(CliTest, CheckNamesEverySkippedLawAndItsReason) {
     // A lone surrogate is valid JSON text the reference (nlohmann) cannot model: O3 and O4
-    // examine nothing, and the summary must say so.
+    // examine nothing, and the summary must say so. The duplicate scan reads through the same
+    // reference, cannot finish either, so O6 skips too rather than assume "no duplicates".
     const std::string in = temp_path("check_skip.json");
     write_file(in, R"({"a":1,"b":"\ud800"})");
     const RunResult r = run({"check", "--sut", "toy", "--in", in});
     ::remove(in.c_str());
     ASSERT_EQ(r.status, 0) << r.out;
     const std::string line = last_line(r.out);
-    EXPECT_EQ(line.rfind("check: 5 laws ran, 2 skipped (O3 pointer-value: ", 0), 0U) << line;
+    EXPECT_EQ(line.rfind("check: 4 laws ran, 3 skipped (O3 pointer-value: ", 0), 0U) << line;
     EXPECT_NE(line.find("; O4 set-then-remove: "), std::string::npos) << line;
     EXPECT_NE(line.find("the reference cannot model the canonical text"), std::string::npos)
+        << line;
+    EXPECT_NE(line.find("; O6 number-text: the duplicated-key scan was incomplete"),
+              std::string::npos)
         << line;
     const std::string tail = "), 0 violations";
     EXPECT_TRUE(line.size() >= tail.size()

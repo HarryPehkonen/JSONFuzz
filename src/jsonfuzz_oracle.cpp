@@ -366,14 +366,27 @@ private:
     }
 };
 
-std::vector<std::string> duplicated_keys(std::string_view text) {
+// What a duplicate scan found, and whether it reached the end of the text. An unfinished scan
+// holds only the duplicates seen so far, so it must never be read as "no duplicates".
+struct DuplicateScan {
+    std::vector<std::string> duplicated;
+    bool complete = false;
+};
+
+DuplicateScan scan_duplicates(std::string_view text) {
     DuplicateKeyFinder finder;
+    DuplicateScan scan;
     try {
-        (void)json::sax_parse(text, &finder);
+        scan.complete = json::sax_parse(text, &finder);
     } catch (...) {
-        return finder.duplicated; // a partial scan still reports every duplicate it saw
+        scan.complete = false;
     }
-    return finder.duplicated;
+    scan.duplicated = std::move(finder.duplicated); // a partial scan still reports what it saw
+    return scan;
+}
+
+std::vector<std::string> duplicated_keys(std::string_view text) {
+    return scan_duplicates(text).duplicated;
 }
 
 bool through_duplicate(const std::string& p, const std::vector<std::string>& dups) {
@@ -746,7 +759,13 @@ LawResult check_number_text(SystemUnderTest& sut, std::string_view text,
         r.skip_reason = "comments are allowed: the token scanner cannot see them";
         return r;
     }
-    if (!duplicated_keys(text).empty()) {
+    // Scan the text the reference reads (numbers it cannot hold tagged), as O3 and O4 do.
+    const DuplicateScan scan = scan_duplicates(detail::tag_unmodelable_numbers(text).text);
+    if (!scan.complete) {
+        r.skip_reason = "the duplicated-key scan was incomplete (a duplicate may exist)";
+        return r;
+    }
+    if (!scan.duplicated.empty()) {
         r.skip_reason = "the input holds a duplicated key (a SUT may drop it)";
         return r;
     }

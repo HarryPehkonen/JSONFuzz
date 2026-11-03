@@ -54,9 +54,9 @@ The seams: `include/jsonfuzz/version.hpp` is CMake-generated from `project(JSONF
 
 ## Invariants
 
-- One version number: `project(JSONFuzz VERSION 0.2.0)` in `CMakeLists.txt` == the
+- One version number: `project(JSONFuzz VERSION 0.2.1)` in `CMakeLists.txt` == the
   generated `include/jsonfuzz/version.hpp` (`JSONFUZZ_VERSION`) == `jsonfuzz --version`
-  prints `JSONFuzz 0.2.0`. Enforced by the `version` stage of the gate and by
+  prints `JSONFuzz 0.2.1`. Enforced by the `version` stage of the gate and by
   `tests/test_version.cpp` / `tests/test_cli.cpp`.
 - No document in `CI_DOCS_FILES` (README.md, CLAUDE.md, docs/BRIEF-v0.1.md) may quote a
   test count. Enforced by the `docs` stage. `INCIDENTS.md` is exempt (its entries name

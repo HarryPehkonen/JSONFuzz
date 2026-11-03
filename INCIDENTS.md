@@ -14,6 +14,46 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-11-03 — O6 skipped nothing on a document that held a duplicated key AND a number a double cannot hold
+
+What broke:        A law that examined the wrong thing is easier to notice than a law that
+                   *skipped* the wrong thing, and O6 was skipping nothing where it must skip. It
+                   refuses a document whose keys repeat (the reference cannot arbitrate which
+                   duplicate a SUT kept), and that decision scanned the RAW text through nlohmann,
+                   which throws `out_of_range.406` at the first number a double cannot hold —
+                   *before* the second copy of a repeated key. The partial scan then read as
+                   "no duplicates here". Measured on the published 0.2.0 tree with the toy SUT:
+                   `{"a":[1e309],"a":2}` printed `7 laws ran, 0 skipped` while
+                   `{"a":[1.5],"a":2}` printed `6 laws ran, 1 skipped`. Same for `1e999`, for the
+                   number nested under an object, and with other keys between the two copies.
+                   The consequence was not silence but a FALSE VIOLATION: against a parser that
+                   keeps the last duplicate — JSOM's tree, and nlohmann's own default — O6 held a
+                   correct answer to the wrong question and reported it. It is the mirror image of
+                   the entry below: there a law examined nothing and said nothing, here a law
+                   examined nothing and blamed the SUT.
+Check added:       `scan_duplicates()` returns what it found *and* whether it reached the end of
+                   the text (`complete`); the O6 skip decision at `src/jsonfuzz_oracle.cpp`
+                   scans `detail::tag_unmodelable_numbers(text).text` — the text the reference
+                   actually reads, exactly as O3 and O4 already did — and an incomplete scan is a
+                   skip whose reason NAMES it ("the duplicated-key scan was incomplete (a
+                   duplicate may exist)"). Two tests in `tests/test_oracle_laws.cpp`
+                   (`ADuplicatedKeyAfterAnOutOfRangeNumberIsStillASkip`,
+                   `AScanThatCouldNotFinishIsASkipNotACleanRun`), run RED first. The `tests` stage
+                   catches a regression; `cli`'s summary assertion catches a skip going quiet. The
+                   lone-surrogate document shows the consequence in the CLI: O6 now skips there too
+                   (no scan can finish on it), so that test's expectation moved from 5/2 to 4/3 and
+                   gained the assertion that names the reason.
+Why it must stay:  Delete the tagging and a document with a duplicated key goes back to being
+                   evaluated by a reference that cannot see it — the tool blames a correct SUT for
+                   a comparison it never made, which is worse than saying nothing: a false finding
+                   costs the reader trust in every other finding. Delete the `complete` flag and a
+                   scan that stopped early goes back to looking like a clean scan, which is the one
+                   shape this repo has decided must never look like success. Found on 2026-11-03 by
+                   the JSOM laws run, whose tree was the first real SUT with last-duplicate-wins
+                   semantics to be driven through all seven laws.
+
+---
+
 ## 2026-11-03 — two places kept their own copy of the version number
 
 What broke:        The first bump in this repo's life (`0.1.0` → `0.2.0`) failed two stages for

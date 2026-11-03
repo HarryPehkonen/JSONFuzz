@@ -25,6 +25,6 @@ TEST(VersionTest, MacroComponentsAgreeWithFullVersion) {
     const std::string full = JSONFUZZ_VERSION;
     EXPECT_EQ(JSONFUZZ_VERSION_MAJOR, 0);
     EXPECT_EQ(JSONFUZZ_VERSION_MINOR, 2);
-    EXPECT_EQ(JSONFUZZ_VERSION_PATCH, 0);
-    EXPECT_EQ(full, "0.2.0");
+    EXPECT_EQ(JSONFUZZ_VERSION_PATCH, 1);
+    EXPECT_EQ(full, "0.2.1");
 }
