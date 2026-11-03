@@ -90,12 +90,12 @@ bool parses_as_json(const std::string& text) {
 
 } // namespace
 
-TEST(CliTest, VersionPrintsExactString) { EXPECT_EQ(run({"--version"}).out, "JSONFuzz 0.2.1\n"); }
+TEST(CliTest, VersionPrintsExactString) { EXPECT_EQ(run({"--version"}).out, "JSONFuzz 0.3.0\n"); }
 
 TEST(CliTest, HelpExitsZeroAndNamesTheBinary) {
     const RunResult r = run({"--help"});
     EXPECT_EQ(r.status, 0);
-    EXPECT_EQ(r.out.substr(0, 14), "JSONFuzz 0.2.1");
+    EXPECT_EQ(r.out.substr(0, 14), "JSONFuzz 0.3.0");
 }
 
 TEST(CliTest, UnknownVerbFailsWithUsageError) {
@@ -130,9 +130,10 @@ TEST(CliTest, GenWritesIntentSidecar) {
 }
 
 TEST(CliTest, GenIntentSidecarFlagsAnOutOfRangeNumber) {
-    // Seed 6 emits a number a double cannot hold; the sidecar must say so.
+    // Seed 3 emits a number a double cannot hold; the sidecar must say so. (Seed 6 did until the
+    // root-kind mapping changed; the seed is a fixture, the assertions are unchanged.)
     const std::string ip = temp_path("gen_intent_huge.json");
-    const RunResult r = run({"gen", "--seed", "6", "--intent", ip});
+    const RunResult r = run({"gen", "--seed", "3", "--intent", ip});
     ASSERT_EQ(r.status, 0);
     const std::string side = read_file(ip);
     ::remove(ip.c_str());

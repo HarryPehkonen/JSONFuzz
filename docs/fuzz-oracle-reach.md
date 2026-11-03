@@ -3,9 +3,59 @@
 This document records whether the oracle has teeth (sabotages, control first) and how much
 of the input space actually reaches each law. It is the honest companion to the reach guard:
 "a counter is non-zero" is not evidence of reach, so the numbers below are the evidence.
-B6 (numbers a double cannot hold, newest) comes first, then B5 (the v0.3 laws), then B3
+B7 (the root kind under a JSON-shaped corpus, newest) comes first, then B6 (numbers a double cannot hold), then B5 (the v0.3 laws), then B3
 (O1/O2). Each older "cannot see" list is superseded by the newer one, and the B5 list has
 been corrected where B6 made it untrue.
+
+# B7 — the root kind under a JSON-shaped corpus
+
+## The defect
+
+The generator chose a value's kind as `byte % 11`. `{` (123) and `[` (91) both land on 2 and 3,
+which is Number. A campaign whose structured reading mutates bytes that stay JSON-shaped has
+byte 0 equal to `{` or `[` almost always, so it produced no container root: O3's and O4's
+container work was starved by the shape of the corpus, not by any mutator. (The JSOM laws run
+of 2026-11-03 measured it: 446 inputs, zero container roots.)
+
+## Measurement (same command before and after)
+
+200 inputs: input `i` is 64 bytes from the splitmix64 stream seeded `i` with byte 0 set to
+`{` (even `i`) or `[` (odd `i`); `generate(GenOptions{}, bytes)`; root kind read from the
+first character of the text. The same family is the test `Generator.JsonShapedInputsStillReachBothContainerRoots`.
+
+| Of 200 JSON-shaped inputs | Before (`byte % 11`) | After (`byte * 185 mod 256`, scaled to 11) |
+|---|---|---|
+| Object roots | 0 | 100 |
+| Array roots | 0 | 100 |
+| Number roots | 200 | 0 |
+| String / null / bool roots | 0 | 0 |
+| Documents with any number | 200 | 98 |
+| Documents holding a number a double cannot hold | 5 | 5 |
+
+The test floor is 25 object and 25 array roots of 200: a uniform choice gives each container
+kind weight 2/11 (about 36), so 25 sits under the expectation, and the starved mapping gave 0.
+
+## The fix, and what it keeps
+
+The kind choice reads ONE byte, spreads it by an odd multiplier (a bijection on 0..255) and
+scales it onto the weights. It is still a pure function of that byte, so the generator stays
+byte-steerable: the same bytes give the same document (documented in
+`include/jsonfuzz/generator.hpp`, asserted by `Generator.RootKindIsAFunctionOfTheBytes`).
+
+## What is still starved
+
+- **The family is not uniform over bytes.** On the JSON-shaped family every root is a container
+  (`{` and `[` map to Object and Array); a corpus whose byte 0 is a quote or a digit gets the
+  scalar kind the multiplier assigns it, not a spread. 185 was chosen so `{`, `[` and the
+  other JSON-shaped bytes cover all kinds; any fixed mapping has some byte it sends somewhere
+  unhelpful. The root is now steered, not randomised.
+- **Out-of-range numbers did not move** (5 of 200 before and after). The class comes from the
+  number-text branch (p = 1/48 per number) and needs a container to hold several numbers;
+  the family's tails are random bytes, not JSON-shaped ones, so this says nothing about a real
+  corpus's reach to the class. Not measured on a real corpus here.
+- Fixture change: `CliTest.GenIntentSidecarFlagsAnOutOfRangeNumber` pinned `gen --seed 6`,
+  whose output the new mapping changed; it now pins seed 3, which emits `1e309`. The
+  assertions are unchanged.
 
 # B6 — O3 and O4 on numbers a double cannot hold
 

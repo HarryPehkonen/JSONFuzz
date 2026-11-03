@@ -414,4 +414,43 @@ TEST(GeneratorAdversarialTest, BoundaryNumberTextIsPresent) {
     EXPECT_TRUE(saw_boundary);
 }
 
+// A corpus a real SUT produces is JSON-shaped, so byte 0 is almost always '{' or '['. The
+// root kind used to be `byte % 11`, which put both on a Number: zero container roots over
+// such a corpus. Measured over this family before the fix: object 0, array 0 of 200.
+// Floor: 25 of 200 (12.5%) each. A uniform choice gives each container kind weight 2/11
+// (~36 of 200), so 25 is under the expectation with room for the fixed family's spread,
+// and far above the 0 the starved mapping produced.
+std::vector<uint8_t> json_shaped_input(int i) {
+    std::vector<uint8_t> in = bytes_from_seed(static_cast<uint64_t>(i), 64);
+    in[0] = (i % 2 == 0) ? '{' : '[';
+    return in;
+}
+
+TEST(Generator, JsonShapedInputsStillReachBothContainerRoots) {
+    int objects = 0;
+    int arrays = 0;
+    for (int i = 0; i < 200; ++i) {
+        const std::vector<uint8_t> in = json_shaped_input(i);
+        ByteSource bytes(in.data(), in.size());
+        const Generated g = generate(GenOptions{}, bytes);
+        objects += g.text[0] == '{' ? 1 : 0;
+        arrays += g.text[0] == '[' ? 1 : 0;
+    }
+    EXPECT_GE(objects, 25) << "object roots of 200";
+    EXPECT_GE(arrays, 25) << "array roots of 200";
+}
+
+// The guard against the fix becoming randomness: the same bytes choose the same root kind.
+TEST(Generator, RootKindIsAFunctionOfTheBytes) {
+    for (int i = 0; i < 200; ++i) {
+        const std::vector<uint8_t> in = json_shaped_input(i);
+        ByteSource first(in.data(), in.size());
+        ByteSource second(in.data(), in.size());
+        const Generated a = generate(GenOptions{}, first);
+        const Generated b = generate(GenOptions{}, second);
+        EXPECT_EQ(a.text[0], b.text[0]) << "input " << i;
+        EXPECT_EQ(a.text, b.text) << "input " << i;
+    }
+}
+
 } // namespace

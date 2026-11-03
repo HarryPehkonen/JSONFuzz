@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(JSONFuzz VERSION 0.2.1 LANGUAGES CXX)
+project(JSONFuzz VERSION 0.3.0 LANGUAGES CXX)
 
 # ================================
 # Version — single source of truth

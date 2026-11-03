@@ -33,6 +33,20 @@ private:
         return static_cast<int>(bytes_.next() % static_cast<uint8_t>(n));
     }
 
+    // A deterministic value in [0, n) from ONE byte, for the choice that decides a value's
+    // kind. `byte % n` sends the bytes a JSON-shaped corpus is made of ('{' 123, '[' 91, ...)
+    // to the same few residues; 11 sent both containers to Number, so such a corpus never
+    // produced a container root. The byte is spread by an odd multiplier (a bijection on
+    // 0..255, so every byte still maps to exactly one kind; 185 puts '{' on Object and '['
+    // on Array and spreads the other JSON-shaped bytes evenly) and then scaled onto [0, n),
+    // which keeps the weights. Still a pure function of that one byte: same bytes, same
+    // kind, so the mutator can steer it (the contract is in generator.hpp: "the same bytes
+    // always produce the same document").
+    int pick_spread(int n) {
+        const auto spread = static_cast<unsigned>(static_cast<uint8_t>(bytes_.next() * 185U));
+        return static_cast<int>(spread * static_cast<unsigned>(n) / 256U);
+    }
+
     bool pick_bool() { return (bytes_.next() & 1) != 0; }
 
     // True with probability adversarial_weight/100.
@@ -61,7 +75,7 @@ private:
         int w_arr = 2 + options_.nesting_bias / 20;
         int w_obj = 2 + options_.nesting_bias / 20;
         const int total = w_null + w_bool + w_num + w_str + w_arr + w_obj;
-        int r = pick(total);
+        int r = pick_spread(total);
         if (r < w_null) {
             return Kind::Null;
         }
