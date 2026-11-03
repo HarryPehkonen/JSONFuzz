@@ -155,7 +155,7 @@ The repo is wired from `~/hermes-workspace/AI-DEV-STARTER` (kit HEAD
   repo-scoped `.clang-tidy` (`bugprone-*`,`performance-*`, positive `HeaderFilterRegex` matching
   only `include/jsonfuzz/.*\.hpp$|JSONFuzz/(src|tests|fuzz)/.*\.cpp$` — an unfiltered run lints
   the dependency's headers and can never be green).
-- Artifact identity: `project(JSONFuzz VERSION 0.1.0)` ↔ the CMake-generated
+- Artifact identity: `project(JSONFuzz VERSION x.y.z)` ↔ the CMake-generated
   `include/jsonfuzz/version.hpp` ↔ what the binary prints for `--version`.
 - `.gitignore`: `build*/`, `.ci-logs/`, `.ci.env`, `fuzz/corpus/`, `*.intent.json`.
   `fuzz/seeds/` and `fuzz/regressions/` are **tracked** (the seeds are the documentation

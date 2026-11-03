@@ -14,7 +14,39 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
-## 2026-10-30 — O3 and O4 examined nothing on any document holding a number a double cannot hold
+## 2026-11-03 — two places kept their own copy of the version number
+
+What broke:        The first bump in this repo's life (`0.1.0` → `0.2.0`) failed two stages for
+                   reasons that had nothing to do with the release, because two files wrote the
+                   number down a second time and only coincidence had kept them true:
+                   (1) `cmake/version.hpp.in` carried the version in its doc comment
+                   (`JSONFUZZ_VERSION "0.1.0"`) as literal text while the `#define`s below it used
+                   `@PROJECT_VERSION@`. The `version` stage reads the FIRST quoted x.y.z in the
+                   header, so it read the comment and reported "the two copies of the version
+                   number disagree". The generated header had been documenting a version only
+                   coincidence kept true.
+                   (2) `tools/cli_smoke.sh` asserted `^JSONFuzz 0\.1\.0$` — a second copy of the
+                   number inside the check that exists to prove the binary reports it. The `cli`
+                   stage went from 27 checks to 26 the moment the version moved.
+                   Both were invisible for the repo's whole life before this: the first release was
+                   the first time anything could see them. The 0.2.0 brief named CMakeLists, the
+                   tests and CLAUDE.md, and its own three stages (format/build/tests) were green
+                   with both still broken — the stages that catch them are `version` and `cli`,
+                   which the brief did not ask for.
+Check added:       `cmake/version.hpp.in` derives its doc comment from the same variables as the
+                   defines (`@PROJECT_VERSION@`, `..._MAJOR/MINOR/PATCH`); `tools/cli_smoke.sh`
+                   reads the expected string out of `CMakeLists.txt` with the same
+                   `project(<name> VERSION x.y.z)` parse the `version` stage uses, and FAILS (not
+                   skips) when it cannot find it. Caught by the `version` and `cli` stages, which
+                   were already there and merely had second copies to disagree with. The `cli`
+                   check kept its teeth: a binary printing `JSONFuzz 9.9.9` still fails it.
+Why it must stay:  Delete either derivation and the next bump fails a gate for a reason that has
+                   nothing to do with the release; a reader who "fixes" it the quick way has put a
+                   version number back in a second home, which is exactly what the single-source
+                   rule exists to prevent — and a number in a *check* is the worst place for it,
+                   because then the check measures the copy rather than the artifact.
+
+---
 
 What broke:        The reference of O3 (pointer value) and O4 (set-then-remove) is nlohmann, which
                    throws out_of_range.406 on 1e309, -1e309, 1e9999, a huge exponent or a 400-digit

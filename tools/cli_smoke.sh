@@ -50,8 +50,19 @@ if [ ! -x "$JSONFUZZ" ]; then
 fi
 
 # --- identity and help ------------------------------------------------------
+# The version has ONE home: `project(JSONFuzz VERSION ...)` in CMakeLists.txt. This script reads
+# it instead of carrying a second copy: a hardcoded "0.1.0" made the check below pass for as long
+# as the number did not move, and then failed the first release for a reason that had nothing to
+# do with the release (2026-11-03).
+DECLARED_VERSION=$(sed -n 's/^project *( *[A-Za-z0-9_.-]* *VERSION *\([0-9][0-9.]*\).*/\1/p' \
+    "$REPO_ROOT/CMakeLists.txt" | head -1)
+if [ -z "$DECLARED_VERSION" ]; then
+    printf '      FAIL: could not read project(<name> VERSION x.y.z) from %s\n' "$REPO_ROOT/CMakeLists.txt"
+    exit 1
+fi
+
 check        "--version exits 0"                0 "$JSONFUZZ" --version
-expect_output "--version prints the exact string" '^JSONFuzz 0\.1\.0$' "$JSONFUZZ" --version
+expect_output "--version prints the exact string" "^JSONFuzz ${DECLARED_VERSION//./\\.}\$" "$JSONFUZZ" --version
 check        "--help exits 0"                   0 "$JSONFUZZ" --help
 expect_output "--help names the binary"         'JSONFuzz' "$JSONFUZZ" --help
 check        "no arguments is a usage error"    2 "$JSONFUZZ"

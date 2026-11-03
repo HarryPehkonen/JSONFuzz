@@ -90,12 +90,12 @@ bool parses_as_json(const std::string& text) {
 
 } // namespace
 
-TEST(CliTest, VersionPrintsExactString) { EXPECT_EQ(run({"--version"}).out, "JSONFuzz 0.1.0\n"); }
+TEST(CliTest, VersionPrintsExactString) { EXPECT_EQ(run({"--version"}).out, "JSONFuzz 0.2.0\n"); }
 
 TEST(CliTest, HelpExitsZeroAndNamesTheBinary) {
     const RunResult r = run({"--help"});
     EXPECT_EQ(r.status, 0);
-    EXPECT_EQ(r.out.substr(0, 14), "JSONFuzz 0.1.0");
+    EXPECT_EQ(r.out.substr(0, 14), "JSONFuzz 0.2.0");
 }
 
 TEST(CliTest, UnknownVerbFailsWithUsageError) {
